@@ -28,7 +28,26 @@ const driverPerformanceService = {
       
       // Faire l'appel API avec authentification
       const response = await api.get(url);
-      return response.data;
+      
+      // Transformer la réponse pour s'assurer qu'elle contient une propriété period
+      const data = response.data;
+      
+      // Si la réponse ne contient pas de période, ajouter une période par défaut
+      if (!data.period) {
+        // Calculer la différence en jours entre startDate et endDate
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+        
+        data.period = {
+          startDate,
+          endDate,
+          days: diffDays
+        };
+      }
+      
+      return data;
     } catch (error) {
       console.error('Erreur lors de la récupération des données de performance des chauffeurs:', error);
       throw error;

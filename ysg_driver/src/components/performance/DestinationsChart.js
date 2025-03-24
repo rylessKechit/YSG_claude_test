@@ -6,16 +6,37 @@ const DestinationsChart = ({ performanceData }) => {
   const [destinationStats, setDestinationStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { period } = performanceData;
+  
+  // S'assurer que period existe avec des valeurs par défaut
+  const period = performanceData?.period || { 
+    startDate: new Date().toISOString().split('T')[0], 
+    endDate: new Date().toISOString().split('T')[0],
+    days: 0
+  };
   
   // Charger les statistiques de destination
   useEffect(() => {
     const loadDestinationStats = async () => {
       try {
         setLoading(true);
+        
+        // S'assurer que startDate et endDate sont définis
+        const startDate = period.startDate;
+        const endDate = period.endDate;
+        
+        if (!startDate || !endDate) {
+          setDestinationStats({
+            totalDestinations: 0,
+            totalMovements: 0,
+            destinationStats: []
+          });
+          setLoading(false);
+          return;
+        }
+        
         const stats = await driverPerformanceService.getDestinationStats(
-          period.startDate, 
-          period.endDate
+          startDate, 
+          endDate
         );
         setDestinationStats(stats);
         setLoading(false);
@@ -26,7 +47,11 @@ const DestinationsChart = ({ performanceData }) => {
       }
     };
     
-    loadDestinationStats();
+    if (period.startDate && period.endDate) {
+      loadDestinationStats();
+    } else {
+      setLoading(false);
+    }
   }, [period]);
 
   // Formatage du temps en minutes
@@ -88,9 +113,10 @@ const DestinationsChart = ({ performanceData }) => {
     );
   }
 
-  // Limiter à 5 destinations principales
-  const topDestinations = destinationStats ? 
-    destinationStats.destinationStats.slice(0, 5) : [];
+  // Limiter à 5 destinations principales et s'assurer que destinationStats existe
+  const topDestinations = (destinationStats && destinationStats.destinationStats) 
+    ? destinationStats.destinationStats.slice(0, 5) 
+    : [];
 
   return (
     <div className="chart-card destinations-chart">
@@ -136,11 +162,11 @@ const DestinationsChart = ({ performanceData }) => {
             
             <div className="destinations-summary">
               <div className="summary-item">
-                <div className="summary-value">{destinationStats.totalDestinations}</div>
+                <div className="summary-value">{destinationStats.totalDestinations || 0}</div>
                 <div className="summary-label">Destinations uniques</div>
               </div>
               <div className="summary-item">
-                <div className="summary-value">{destinationStats.totalMovements}</div>
+                <div className="summary-value">{destinationStats.totalMovements || 0}</div>
                 <div className="summary-label">Mouvements totaux</div>
               </div>
             </div>

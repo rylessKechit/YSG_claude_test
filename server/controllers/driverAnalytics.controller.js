@@ -46,6 +46,15 @@ const driverAnalyticsController = {
         fullName: user.fullName
       };
       
+      // Ajouter la propriété period si elle n'existe pas
+      if (!performance.period) {
+        performance.period = {
+          startDate: dateRange.startDate || new Date().toISOString().split('T')[0],
+          endDate: dateRange.endDate || new Date().toISOString().split('T')[0],
+          days: calculateDays(dateRange.startDate, dateRange.endDate)
+        };
+      }
+      
       res.json(performance);
     } catch (error) {
       console.error('Erreur lors de la récupération des performances du chauffeur:', error);
@@ -86,15 +95,26 @@ const driverAnalyticsController = {
       if (endDate) dateRange.endDate = endDate;
       
       // Récupérer les données comparatives
-      const compareData = await driverPerformanceService.compareDrivers(driverIds, dateRange);
+      let compareData = await driverPerformanceService.compareDrivers(driverIds, dateRange);
       
       // Récupérer les métriques globales
       const globalMetrics = await driverPerformanceService.generateGlobalDriverMetrics(dateRange);
       
-      res.json({
+      // Calcul du nombre de jours
+      const days = calculateDays(startDate, endDate);
+      
+      // Assurer que tous les objets ont les propriétés requises
+      const formattedData = {
         comparativeData: compareData,
-        globalMetrics
-      });
+        globalMetrics,
+        period: {
+          startDate: startDate || new Date().toISOString().split('T')[0],
+          endDate: endDate || new Date().toISOString().split('T')[0],
+          days
+        }
+      };
+      
+      res.json(formattedData);
     } catch (error) {
       console.error('Erreur lors de la comparaison des chauffeurs:', error);
       res.status(500).json({ message: 'Erreur serveur' });
@@ -146,9 +166,17 @@ const driverAnalyticsController = {
         }
       }
       
+      // Ajouter la période
+      performance.period = {
+        startDate: dateRange.startDate || new Date().toISOString().split('T')[0],
+        endDate: dateRange.endDate || new Date().toISOString().split('T')[0],
+        days: calculateDays(dateRange.startDate, dateRange.endDate)
+      };
+      
       res.json({
         driverId: userId,
-        dailyMetrics: performance.dailyMetrics
+        dailyMetrics: performance.dailyMetrics,
+        period: performance.period
       });
     } catch (error) {
       console.error('Erreur lors de la récupération des métriques quotidiennes:', error);
@@ -173,7 +201,17 @@ const driverAnalyticsController = {
       // Récupérer les métriques globales
       const globalMetrics = await driverPerformanceService.generateGlobalDriverMetrics(dateRange);
       
-      res.json(globalMetrics);
+      // Ajouter la période
+      const responseData = {
+        ...globalMetrics,
+        period: {
+          startDate: dateRange.startDate || new Date().toISOString().split('T')[0],
+          endDate: dateRange.endDate || new Date().toISOString().split('T')[0],
+          days: calculateDays(dateRange.startDate, dateRange.endDate)
+        }
+      };
+      
+      res.json(responseData);
     } catch (error) {
       console.error('Erreur lors de la récupération des métriques globales des chauffeurs:', error);
       res.status(500).json({ message: 'Erreur serveur' });
@@ -247,11 +285,18 @@ const driverAnalyticsController = {
         uniqueDrivers: dest.uniqueDrivers
       }));
       
-      res.json({
+      const responseData = {
         totalDestinations: formattedStats.length,
         totalMovements,
-        destinationStats: formattedStats
-      });
+        destinationStats: formattedStats,
+        period: {
+          startDate: startDate || new Date().toISOString().split('T')[0],
+          endDate: endDate || new Date().toISOString().split('T')[0],
+          days: calculateDays(startDate, endDate)
+        }
+      };
+      
+      res.json(responseData);
     } catch (error) {
       console.error('Erreur lors de la récupération des statistiques par destination:', error);
       res.status(500).json({ message: 'Erreur serveur' });
@@ -348,15 +393,43 @@ const driverAnalyticsController = {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
       
-      res.json({
+      const responseData = {
         peakHours,
-        byDayOfWeek
-      });
+        byDayOfWeek,
+        period: {
+          startDate: startDate || new Date().toISOString().split('T')[0],
+          endDate: endDate || new Date().toISOString().split('T')[0],
+          days: calculateDays(startDate, endDate)
+        }
+      };
+      
+      res.json(responseData);
     } catch (error) {
       console.error('Erreur lors de la récupération des heures de pointe:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
 };
+
+/**
+ * Calcule le nombre de jours entre deux dates
+ * @param {string} startDate - Date de début au format YYYY-MM-DD
+ * @param {string} endDate - Date de fin au format YYYY-MM-DD
+ * @returns {number} - Nombre de jours entre les deux dates
+ */
+function calculateDays(startDate, endDate) {
+  if (!startDate || !endDate) return 28; // valeur par défaut de 28 jours
+  
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // S'assurer que les dates sont valides
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 28;
+  
+  const diffTime = Math.abs(end - start);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays || 1; // Au moins 1 jour si le calcul donne 0
+}
 
 module.exports = driverAnalyticsController;

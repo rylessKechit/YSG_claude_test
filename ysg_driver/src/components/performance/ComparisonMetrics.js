@@ -10,10 +10,10 @@ const ComparisonMetrics = ({
 }) => {
   const [selectedMetric, setSelectedMetric] = useState(isDriverView ? 'avgCompletionTime' : 'avgCompletionTime');
   
-  // Déterminer la source de données en fonction du type de vue
+  // Déterminer la source de données en fonction du type de vue et s'assurer qu'elle existe
   const dataSource = isDriverView 
-    ? performanceData.comparativeData
-    : performanceData.preparatorsData;
+    ? (performanceData?.comparativeData || [])
+    : (performanceData?.preparatorsData || []);
   
   // ID des utilisateurs dans les données
   const userIdField = isDriverView ? 'driverId' : 'preparatorId';
@@ -104,22 +104,27 @@ const ComparisonMetrics = ({
 
   // Obtenir la valeur d'une métrique pour un utilisateur spécifique
   const getMetricValue = (user, metricId) => {
+    // Vérifier d'abord si l'utilisateur existe
+    if (!user || !user._id) return 0;
+    
     const userData = dataSource.find(d => d[userIdField] === user._id);
-    if (!userData) return 0;
+    if (!userData || !userData.metrics) return 0;
+    
+    const metrics = userData.metrics;
     
     if (isDriverView) {
       // Métriques pour les chauffeurs
       switch (metricId) {
         case 'avgCompletionTime':
-          return userData.metrics.averageCompletionTime;
+          return metrics.averageCompletionTime || 0;
         case 'totalItems':
-          return userData.metrics.totalMovements;
+          return metrics.totalMovements || 0;
         case 'itemsPerDay':
-          return userData.metrics.movementsPerDay;
+          return metrics.movementsPerDay || 0;
         case 'averagePreparationTime':
-          return userData.metrics.averagePreparationTime;
+          return metrics.averagePreparationTime || 0;
         case 'averageMovementTime':
-          return userData.metrics.averageMovementTime;
+          return metrics.averageMovementTime || 0;
         default:
           return 0;
       }
@@ -127,22 +132,22 @@ const ComparisonMetrics = ({
       // Métriques pour les préparateurs
       switch (metricId) {
         case 'avgCompletionTime':
-          return userData.metrics.avgCompletionTime;
+          return metrics.avgCompletionTime || 0;
         case 'totalItems':
-          return userData.metrics.totalPreparations;
+          return metrics.totalPreparations || 0;
         case 'itemsPerDay':
-          return parseFloat((userData.metrics.totalPreparations / performanceData.period.days).toFixed(1));
+          return parseFloat(((metrics.totalPreparations || 0) / (performanceData?.period?.days || 1)).toFixed(1));
         case 'exteriorWashingTime':
-          return userData.metrics.taskMetrics.exteriorWashing.avgTime;
+          return metrics.taskMetrics?.exteriorWashing?.avgTime || 0;
         case 'interiorCleaningTime':
-          return userData.metrics.taskMetrics.interiorCleaning.avgTime;
+          return metrics.taskMetrics?.interiorCleaning?.avgTime || 0;
         case 'refuelingTime':
-          return userData.metrics.taskMetrics.refueling.avgTime;
+          return metrics.taskMetrics?.refueling?.avgTime || 0;
         case 'parkingTime':
-          return userData.metrics.taskMetrics.parking.avgTime;
+          return metrics.taskMetrics?.parking?.avgTime || 0;
         case 'completionRate':
-          return userData.metrics.completedPreparations > 0 && userData.metrics.totalPreparations > 0 
-            ? parseFloat((userData.metrics.completedPreparations / userData.metrics.totalPreparations * 100).toFixed(1)) 
+          return metrics.completedPreparations > 0 && metrics.totalPreparations > 0 
+            ? parseFloat(((metrics.completedPreparations / metrics.totalPreparations) * 100).toFixed(1)) 
             : 0;
         default:
           return 0;
@@ -173,6 +178,8 @@ const ComparisonMetrics = ({
     const valueB = getMetricValue(b, selectedMetric);
     const metric = metrics.find(m => m.id === selectedMetric);
     
+    if (!metric) return 0;
+    
     return metric.inverse 
       ? valueA - valueB  // Si inverse, le plus petit est meilleur
       : valueB - valueA; // Sinon, le plus grand est meilleur
@@ -193,14 +200,16 @@ const ComparisonMetrics = ({
     const currentValue = getMetricValue(user, selectedMetric);
     const metric = metrics.find(m => m.id === selectedMetric);
     
+    if (!metric) return 0;
+    
     if (bestUserValue === 0) return 0;
     
     if (metric.inverse) {
       // Pour les métriques inverses (temps), plus faible est meilleur
-      return (bestUserValue / currentValue) * 100;
+      return (bestUserValue / (currentValue || 1)) * 100;
     } else {
       // Pour les métriques régulières, plus élevé est meilleur
-      return (currentValue / bestUserValue) * 100;
+      return ((currentValue || 0) / (bestUserValue || 1)) * 100;
     }
   };
 

@@ -3,7 +3,9 @@ import React, { useState } from 'react';
 
 const CompletionTimeChart = ({ performanceData }) => {
   const [chartType, setChartType] = useState('completion'); // 'completion', 'preparation', 'movement'
-  const { comparativeData } = performanceData;
+  
+  // S'assurer que comparativeData existe
+  const comparativeData = performanceData?.comparativeData || [];
   
   // Formatage du temps en minutes en format lisible
   const formatTime = (minutes) => {
@@ -20,11 +22,13 @@ const CompletionTimeChart = ({ performanceData }) => {
     if (!driver) return 'Inconnu';
     
     if (driver.driverInfo) return driver.driverInfo.fullName;
-    return `Chauffeur ${driver.driverId.slice(0, 5)}...`;
+    return `Chauffeur ${id.slice(0, 5)}...`;
   };
 
   // Obtenir la valeur métrique appropriée selon le type de graphique
   const getMetricValue = (driver) => {
+    if (!driver || !driver.metrics) return 0;
+    
     switch (chartType) {
       case 'completion':
         return driver.metrics.averageCompletionTime || 0;
@@ -85,32 +89,32 @@ const CompletionTimeChart = ({ performanceData }) => {
       </div>
 
       <div className="chart-content">
-        {comparativeData.map((driver) => {
-          const metricValue = getMetricValue(driver);
-          const barWidth = getBarWidth(metricValue);
-          
-          return (
-            <div key={driver.driverId} className="time-bar-container">
-              <div className="driver-label">
-                {getDriverName(driver.driverId)}
+        {comparativeData.length > 0 ? (
+          comparativeData.map((driver) => {
+            const metricValue = getMetricValue(driver);
+            const barWidth = getBarWidth(metricValue);
+            
+            return (
+              <div key={driver.driverId} className="time-bar-container">
+                <div className="driver-label">
+                  {getDriverName(driver.driverId)}
+                </div>
+                <div className="bar-wrapper">
+                  <div 
+                    className="time-bar" 
+                    style={{
+                      width: `${barWidth}%`,
+                      backgroundColor: "#3b82f6"
+                    }}
+                  ></div>
+                  <span className="bar-value">
+                    {formatTime(metricValue)}
+                  </span>
+                </div>
               </div>
-              <div className="bar-wrapper">
-                <div 
-                  className="time-bar" 
-                  style={{
-                    width: `${barWidth}%`,
-                    backgroundColor: "#3b82f6"
-                  }}
-                ></div>
-                <span className="bar-value">
-                  {formatTime(metricValue)}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-        
-        {comparativeData.length === 0 && (
+            );
+          })
+        ) : (
           <div className="no-data-message">
             Aucune donnée disponible pour cette période
           </div>

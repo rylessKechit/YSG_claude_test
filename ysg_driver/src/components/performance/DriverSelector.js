@@ -1,5 +1,6 @@
 // src/components/performance/DriverSelector.js
 import React, { useState, useRef, useEffect } from 'react';
+import '../../styles/DriverSelector.css'; // N'oubliez pas d'importer le fichier CSS
 
 const DriverSelector = ({ allDrivers, selectedDrivers, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -75,19 +76,22 @@ const DriverSelector = ({ allDrivers, selectedDrivers, onChange }) => {
                     <button 
                       className="badge-remove" 
                       onClick={() => handleDriverToggle(id)}
+                      aria-label={`Supprimer ${driver.fullName}`}
                     >
                       ×
                     </button>
                   </div>
                 );
               })}
-              <button 
-                className="clear-selection" 
-                onClick={resetSelection}
-                title="Effacer la sélection"
-              >
-                <i className="fas fa-times"></i>
-              </button>
+              {selectedDrivers.length > 1 && (
+                <button 
+                  className="clear-selection" 
+                  onClick={resetSelection}
+                  title="Effacer la sélection"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              )}
             </div>
           ) : (
             <div className="no-selection">Aucun chauffeur sélectionné</div>
@@ -96,6 +100,8 @@ const DriverSelector = ({ allDrivers, selectedDrivers, onChange }) => {
           <button 
             className="dropdown-toggle" 
             onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            aria-label="Ouvrir la liste des chauffeurs"
           >
             <i className={`fas fa-chevron-${isOpen ? 'up' : 'down'}`}></i>
           </button>
@@ -111,11 +117,13 @@ const DriverSelector = ({ allDrivers, selectedDrivers, onChange }) => {
                   placeholder="Rechercher un chauffeur..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  aria-label="Rechercher un chauffeur"
                 />
                 {searchTerm && (
                   <button 
                     className="clear-search" 
                     onClick={() => setSearchTerm('')}
+                    aria-label="Effacer la recherche"
                   >
                     ×
                   </button>
@@ -160,7 +168,11 @@ const DriverSelector = ({ allDrivers, selectedDrivers, onChange }) => {
                   </div>
                 ))
               ) : (
-                <div className="no-results">Aucun chauffeur trouvé</div>
+                <div className="no-results">
+                  {searchTerm ? 
+                    `Aucun chauffeur ne correspond à "${searchTerm}"` : 
+                    "Aucun chauffeur disponible"}
+                </div>
               )}
             </div>
           </div>

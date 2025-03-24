@@ -6,10 +6,11 @@ const PerformanceOverview = ({
   isDriverView = false,
   isPreparatorView = false 
 }) => {
-  const { period } = performanceData;
+  // Vérification de sécurité pour performanceData et ses propriétés
+  const period = performanceData?.period || { days: 0 };
   const overallMetrics = isDriverView 
-    ? performanceData.globalMetrics 
-    : performanceData.overallMetrics;
+    ? (performanceData?.globalMetrics || {}) 
+    : (performanceData?.overallMetrics || {});
   
   // Convertir les minutes en format heures:minutes
   const formatTime = (minutes) => {
@@ -27,23 +28,25 @@ const PerformanceOverview = ({
   // Calculer le taux de complétion en fonction du type de vue
   const calculateCompletionRate = () => {
     if (isDriverView) {
-      const completedMovements = performanceData.comparativeData.reduce(
-        (sum, d) => sum + (d.metrics.completedMovements || 0), 0
+      const comparativeData = performanceData?.comparativeData || [];
+      const completedMovements = comparativeData.reduce(
+        (sum, d) => sum + (d.metrics?.completedMovements || 0), 0
       );
       
-      const totalMovements = performanceData.comparativeData.reduce(
-        (sum, d) => sum + (d.metrics.totalMovements || 0), 0
+      const totalMovements = comparativeData.reduce(
+        (sum, d) => sum + (d.metrics?.totalMovements || 0), 0
       );
       
       if (totalMovements === 0) return 0;
       return Math.round((completedMovements / totalMovements) * 100);
     } else {
-      const totalCompleted = performanceData.preparatorsData.reduce(
-        (sum, p) => sum + p.metrics.completedPreparations, 0
+      const preparatorsData = performanceData?.preparatorsData || [];
+      const totalCompleted = preparatorsData.reduce(
+        (sum, p) => sum + (p.metrics?.completedPreparations || 0), 0
       );
       
-      const totalPreps = performanceData.preparatorsData.reduce(
-        (sum, p) => sum + p.metrics.totalPreparations, 0
+      const totalPreps = preparatorsData.reduce(
+        (sum, p) => sum + (p.metrics?.totalPreparations || 0), 0
       );
       
       if (totalPreps === 0) return 0;
@@ -74,7 +77,7 @@ const PerformanceOverview = ({
         },
         {
           icon: "fas fa-chart-line",
-          value: ((overallMetrics.totalMovements || 0) / period.days).toFixed(1),
+          value: ((overallMetrics.totalMovements || 0) / (period.days || 1)).toFixed(1),
           label: "Moyenne par jour",
           color: "#6366f1"
         }
@@ -111,7 +114,7 @@ const PerformanceOverview = ({
       <h2 className="section-title">
         <i className="fas fa-tachometer-alt"></i> Vue d'ensemble
         <span className="period-info">
-          {period.days} jour{period.days > 1 ? 's' : ''}
+          {period.days || 0} jour{(period.days || 0) > 1 ? 's' : ''}
         </span>
       </h2>
       

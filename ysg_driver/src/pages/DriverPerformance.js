@@ -55,7 +55,7 @@ const DriverPerformance = () => {
         setLoading(false);
       } catch (err) {
         console.error('Erreur lors du chargement des chauffeurs:', err);
-        setError('Erreur lors du chargement des chauffeurs: ' + err.message);
+        setError('Erreur lors du chargement des chauffeurs: ' + (err.message || 'Erreur inconnue'));
         setLoading(false);
       }
     };
@@ -80,11 +80,36 @@ const DriverPerformance = () => {
           dateRange.endDate
         );
         
+        // S'assurer que comparativeData existe
+        if (!data.comparativeData) {
+          data.comparativeData = [];
+        }
+        
+        // S'assurer que globalMetrics existe
+        if (!data.globalMetrics) {
+          data.globalMetrics = {};
+        }
+        
+        // S'assurer que la période est définie
+        if (!data.period) {
+          // Calculer la différence en jours entre startDate et endDate
+          const start = new Date(dateRange.startDate);
+          const end = new Date(dateRange.endDate);
+          const diffTime = Math.abs(end - start);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+          
+          data.period = {
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            days: diffDays
+          };
+        }
+        
         setPerformanceData(data);
         setLoading(false);
       } catch (err) {
         console.error('Erreur lors du chargement des données de performance:', err);
-        setError('Erreur lors du chargement des données de performance: ' + err.message);
+        setError('Erreur lors du chargement des données de performance: ' + (err.message || 'Erreur inconnue'));
         setLoading(false);
       }
     };

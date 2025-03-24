@@ -29,7 +29,7 @@ const ScheduleManager = lazy(() => import('./pages/ScheduleManager'));
 const ScheduleComparison = lazy(() => import('./pages/ScheduleComparison'));
 const WhatsAppSetup = lazy(() => import('./pages/WhatsAppSetup'));
 const PreparatorPerformance = lazy(() => import('./pages/PreparatorPerformance'));
-const DriverPerformance = lazy(() => import.meta('./pages/DriverPerformance'));
+const DriverPerformance = lazy(() => import('./pages/DriverPerformance'));
 
 // Composant de route protégée
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
