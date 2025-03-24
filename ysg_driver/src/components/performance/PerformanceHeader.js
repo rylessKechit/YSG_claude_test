@@ -1,7 +1,12 @@
 // src/components/performance/PerformanceHeader.js
 import React, { useState } from 'react';
 
-const PerformanceHeader = ({ onDateRangeChange, dateRange }) => {
+const PerformanceHeader = ({ 
+  onDateRangeChange, 
+  dateRange,
+  title = "Performance des préparateurs",
+  subtitle = "Analysez et comparez les performances sur la période sélectionnée"
+}) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDateRange, setTempDateRange] = useState({ ...dateRange });
   
@@ -53,7 +58,7 @@ const PerformanceHeader = ({ onDateRangeChange, dateRange }) => {
   return (
     <div className="performance-header">
       <div className="header-content">
-        <h1 className="page-title">Performance des préparateurs</h1>
+        <h1 className="page-title">{title}</h1>
         
         <div className="date-filter">
           <div className="date-display" onClick={() => setShowDatePicker(!showDatePicker)}>
@@ -126,9 +131,7 @@ const PerformanceHeader = ({ onDateRangeChange, dateRange }) => {
         </div>
       </div>
       
-      <p className="page-subtitle">
-        Analysez et comparez les performances des préparateurs sur la période sélectionnée
-      </p>
+      <p className="page-subtitle">{subtitle}</p>
     </div>
   );
 };

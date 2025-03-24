@@ -1,10 +1,10 @@
-// src/pages/PreparatorPerformance.js - Mise à jour
+// src/pages/PreparatorPerformance.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navigation from '../components/Navigation';
-import PerformanceHeader from '../components/performance/PerformanceHeader';
 import PreparatorSelector from '../components/performance/PreparatorSelector';
+import PerformanceHeader from '../components/performance/PerformanceHeader';
 import PerformanceOverview from '../components/performance/PerformanceOverview';
 import TaskCompletionChart from '../components/performance/TaskCompletionChart';
 import PreparationsPerDay from '../components/performance/PreparationsPerDay';
@@ -114,7 +114,12 @@ const PreparatorPerformance = () => {
       <Navigation />
       
       <div className="performance-container">
-        <PerformanceHeader onDateRangeChange={handleDateRangeChange} dateRange={dateRange} />
+        <PerformanceHeader 
+          onDateRangeChange={handleDateRangeChange} 
+          dateRange={dateRange}
+          title="Performance des préparateurs"
+          subtitle="Analysez et comparez les performances des préparateurs sur la période sélectionnée"
+        />
         
         {error && <AlertMessage type="error" message={error} />}
         
@@ -133,7 +138,10 @@ const PreparatorPerformance = () => {
           <>
             {performanceData && selectedPreparators.length > 0 ? (
               <div className="performance-content">
-                <PerformanceOverview performanceData={performanceData} />
+                <PerformanceOverview 
+                  performanceData={performanceData} 
+                  isPreparatorView={true}
+                />
                 
                 <div className="charts-grid">
                   <TaskCompletionChart performanceData={performanceData} />
@@ -143,8 +151,9 @@ const PreparatorPerformance = () => {
                 {selectedPreparators.length > 1 && (
                   <ComparisonMetrics 
                     performanceData={performanceData}
-                    allPreparators={allPreparators}
-                    selectedPreparators={selectedPreparators}
+                    allUsers={allPreparators}
+                    selectedUsers={selectedPreparators}
+                    isPreparatorView={true}
                   />
                 )}
               </div>

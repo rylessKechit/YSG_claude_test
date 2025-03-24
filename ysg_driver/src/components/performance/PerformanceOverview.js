@@ -1,8 +1,15 @@
-// src/components/performance/PerformanceOverview.js - Adaptation
+// src/components/performance/PerformanceOverview.js
 import React from 'react';
 
-const PerformanceOverview = ({ performanceData }) => {
-  const { overallMetrics, period } = performanceData;
+const PerformanceOverview = ({ 
+  performanceData,
+  isDriverView = false,
+  isPreparatorView = false 
+}) => {
+  const { period } = performanceData;
+  const overallMetrics = isDriverView 
+    ? performanceData.globalMetrics 
+    : performanceData.overallMetrics;
   
   // Convertir les minutes en format heures:minutes
   const formatTime = (minutes) => {
@@ -17,47 +24,87 @@ const PerformanceOverview = ({ performanceData }) => {
     return `${mins} min`;
   };
 
-  // Calculer le taux de complétion
+  // Calculer le taux de complétion en fonction du type de vue
   const calculateCompletionRate = () => {
-    const totalCompleted = performanceData.preparatorsData.reduce(
-      (sum, p) => sum + p.metrics.completedPreparations, 0
-    );
-    
-    const totalPreps = performanceData.preparatorsData.reduce(
-      (sum, p) => sum + p.metrics.totalPreparations, 0
-    );
-    
-    if (totalPreps === 0) return 0;
-    return Math.round((totalCompleted / totalPreps) * 100);
+    if (isDriverView) {
+      const completedMovements = performanceData.comparativeData.reduce(
+        (sum, d) => sum + (d.metrics.completedMovements || 0), 0
+      );
+      
+      const totalMovements = performanceData.comparativeData.reduce(
+        (sum, d) => sum + (d.metrics.totalMovements || 0), 0
+      );
+      
+      if (totalMovements === 0) return 0;
+      return Math.round((completedMovements / totalMovements) * 100);
+    } else {
+      const totalCompleted = performanceData.preparatorsData.reduce(
+        (sum, p) => sum + p.metrics.completedPreparations, 0
+      );
+      
+      const totalPreps = performanceData.preparatorsData.reduce(
+        (sum, p) => sum + p.metrics.totalPreparations, 0
+      );
+      
+      if (totalPreps === 0) return 0;
+      return Math.round((totalCompleted / totalPreps) * 100);
+    }
   };
 
-  // Statistiques à afficher
-  const stats = [
-    {
-      icon: "fas fa-car-side",
-      value: overallMetrics.totalPreparations,
-      label: "Préparations totales",
-      color: "#3b82f6"
-    },
-    {
-      icon: "fas fa-clock",
-      value: formatTime(overallMetrics.avgCompletionTime),
-      label: "Temps moyen de complétion",
-      color: "#10b981"
-    },
-    {
-      icon: "fas fa-calendar-check",
-      value: `${calculateCompletionRate()}%`,
-      label: "Taux de complétion",
-      color: "#f59e0b"
-    },
-    {
-      icon: "fas fa-chart-line",
-      value: overallMetrics.avgPreparationsPerDay.toFixed(1),
-      label: "Moyenne par jour",
-      color: "#6366f1"
-    }
-  ];
+  // Statistiques à afficher en fonction du type de vue
+  const stats = isDriverView 
+    ? [
+        {
+          icon: "fas fa-car",
+          value: overallMetrics.totalMovements || 0,
+          label: "Mouvements totaux",
+          color: "#3b82f6"
+        },
+        {
+          icon: "fas fa-clock",
+          value: formatTime(overallMetrics.averageCompletionTime || 0),
+          label: "Temps moyen de complétion",
+          color: "#10b981"
+        },
+        {
+          icon: "fas fa-route",
+          value: formatTime(overallMetrics.averageMovementTime || 0),
+          label: "Temps moyen de trajet",
+          color: "#f59e0b"
+        },
+        {
+          icon: "fas fa-chart-line",
+          value: ((overallMetrics.totalMovements || 0) / period.days).toFixed(1),
+          label: "Moyenne par jour",
+          color: "#6366f1"
+        }
+      ]
+    : [
+        {
+          icon: "fas fa-car-side",
+          value: overallMetrics.totalPreparations || 0,
+          label: "Préparations totales",
+          color: "#3b82f6"
+        },
+        {
+          icon: "fas fa-clock",
+          value: formatTime(overallMetrics.avgCompletionTime || 0),
+          label: "Temps moyen de complétion",
+          color: "#10b981"
+        },
+        {
+          icon: "fas fa-calendar-check",
+          value: `${calculateCompletionRate()}%`,
+          label: "Taux de complétion",
+          color: "#f59e0b"
+        },
+        {
+          icon: "fas fa-chart-line",
+          value: (overallMetrics.avgPreparationsPerDay || 0).toFixed(1),
+          label: "Moyenne par jour",
+          color: "#6366f1"
+        }
+      ];
 
   return (
     <div className="performance-overview-section">
