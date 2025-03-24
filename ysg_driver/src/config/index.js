@@ -45,6 +45,12 @@ export const ENDPOINTS = {
     COMPARATIVE_METRICS: '/analytics/comparative-metrics',
     GLOBAL_METRICS: '/analytics/global-metrics',
     VEHICLE_MODEL_STATS: '/analytics/vehicle-model-stats',
-    PEAK_HOURS: '/analytics/peak-hours'
+    PEAK_HOURS: '/analytics/peak-hours',
+    DRIVER_PERFORMANCE: '/analytics/drivers/:userId/performance',
+    DRIVERS_COMPARE: '/analytics/drivers/compare',
+    DRIVER_DAILY_METRICS: '/analytics/drivers/daily-metrics',
+    DRIVER_GLOBAL_METRICS: '/analytics/drivers/global-metrics',
+    DESTINATION_STATS: '/analytics/drivers/destination-stats',
+    DRIVER_PEAK_HOURS: '/analytics/drivers/peak-hours'
   }
 };
