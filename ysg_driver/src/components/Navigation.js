@@ -13,7 +13,8 @@ const roleLinks = {
     { name: 'Nouveau mouvement', path: '/admin/movements/create' },
     { name: 'Mouvements', path: '/movement/history' },
     { name: 'Préparations', path: '/preparations' },
-    { name: 'Performance', path: '/performance/preparators' },
+    { name: 'Performance préparateurs', path: '/performance/preparators' },
+    { name: 'Performance chauffeurs', path: '/performance/drivers' },
     { name: 'Rapports', path: '/reports' },
     { name: 'Planning préparateurs', path: '/schedules' },
     { name: 'Comparaison pointages', path: '/schedule-comparison' },
@@ -35,7 +36,8 @@ const roleLinks = {
   ],
   direction: [
     { name: 'Rapports', path: '/reports' },
-    { name: 'Performance', path: '/performance/preparators' },
+    { name: 'Performance préparateurs', path: '/performance/preparators' },
+    { name: 'Performance chauffeurs', path: '/performance/drivers' },
     { name: 'Planning préparateurs', path: '/schedules' },
     { name: 'Comparaison pointages', path: '/schedule-comparison' }
   ]

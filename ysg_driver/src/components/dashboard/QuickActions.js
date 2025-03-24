@@ -11,6 +11,7 @@ const QuickActions = ({ currentUser }) => {
         { path: '/movement/history', icon: 'fas fa-history', title: 'Historique des mouvements' },
         { path: '/preparations', icon: 'fas fa-tools', title: 'Historique des préparations' },
         { path: '/performance/preparators', icon: 'fas fa-chart-bar', title: 'Performance préparateurs' },
+        { path: '/performance/drivers', icon: 'fas fa-car', title: 'Performance chauffeurs' },
         { path: '/reports', icon: 'fas fa-file-excel', title: 'Rapports' },
         { path: '/schedules', icon: 'fas fa-calendar-week', title: 'Planning préparateurs' },
         { path: '/schedule-comparison', icon: 'fas fa-chart-line', title: 'Comparaison pointages' },
@@ -30,6 +31,7 @@ const QuickActions = ({ currentUser }) => {
       direction: [
         { path: '/reports', icon: 'fas fa-file-excel', title: 'Rapports' },
         { path: '/performance/preparators', icon: 'fas fa-chart-bar', title: 'Performance préparateurs' },
+        { path: '/performance/drivers', icon: 'fas fa-car', title: 'Performance chauffeurs' },
         { path: '/schedules', icon: 'fas fa-calendar-week', title: 'Planning préparateurs' },
         { path: '/schedule-comparison', icon: 'fas fa-chart-line', title: 'Comparaison pointages' },
         { path: '/profile', icon: 'fas fa-user', title: 'Mon profil' }

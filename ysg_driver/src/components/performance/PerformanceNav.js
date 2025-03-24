@@ -19,11 +19,6 @@ const PerformanceNav = () => {
       icon: 'fas fa-car'
     },
     { 
-      path: '/performance/vehicles', 
-      label: 'Véhicules', 
-      icon: 'fas fa-car-side'
-    },
-    { 
       path: '/reports', 
       label: 'Rapports', 
       icon: 'fas fa-file-alt'
