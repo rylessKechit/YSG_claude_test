@@ -25,7 +25,7 @@ class DriverPerformanceService {
    */
   async getCompletedMovements(userId, dateRange = {}) {
     const query = { 
-      userId: userId ? mongoose.Types.ObjectId(userId) : { $exists: true },
+      userId: userId ? new mongoose.Types.ObjectId(userId) : { $exists: true },
       status: 'completed'
     };
 
@@ -54,7 +54,7 @@ class DriverPerformanceService {
    */
   async getWorkingDays(userId, dateRange = {}) {
     const query = { 
-      userId: userId ? mongoose.Types.ObjectId(userId) : { $exists: true },
+      userId: userId ? new mongoose.Types.ObjectId(userId) : { $exists: true },
       status: 'completed'
     };
 
