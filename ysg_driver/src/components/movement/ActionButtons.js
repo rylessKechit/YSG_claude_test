@@ -37,6 +37,17 @@ const ActionButtons = ({
       condition: () => true,
       disabled: false
     },
+    {
+      id: 'tracking',
+      text: 'Voir sur la carte',
+      action: () => window.location.href = `/tracking?movement=${movement._id}`,
+      className: 'btn btn-info',
+      condition: () => 
+        (currentUser.role === 'admin' || currentUser.role === 'team-leader') && 
+        movement.status === 'in-progress',
+      disabled: false,
+      icon: 'fa-map-marker-alt'
+    },
     
     // Supprimer - admin uniquement et mouvement non démarré
     {

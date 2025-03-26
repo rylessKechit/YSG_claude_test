@@ -33,7 +33,8 @@ const routes = [
   { path: '/api/reports', module: require('./routes/report.routes'), auth: true },
   { path: '/api/schedules', module: require('./routes/schedule.routes'), auth: true },
   { path: '/api/admin', module: require('./routes/admin.routes'), auth: true },
-  { path: '/api/analytics', module: require('./routes/analytics.routes'), auth: true }
+  { path: '/api/analytics', module: require('./routes/analytics.routes'), auth: true },
+  { path: '/api/tracking', module: require('./routes/tracking.routes'), auth: true },
 ];
 
 routes.forEach(route => {

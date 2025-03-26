@@ -13,6 +13,7 @@ import ActionButtons from '../components/movement/ActionButtons';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
 import '../styles/MovementDetail.css';
+import trackingService from '../services/trackingService';
 
 const MovementDetail = () => {
   const [movement, setMovement] = useState(null);
@@ -49,6 +50,57 @@ const MovementDetail = () => {
   useEffect(() => {
     if (currentUser?.role === 'admin') loadDrivers();
   }, [currentUser]);
+
+  useEffect(() => {
+    // Ne démarrer le tracking que si c'est un mouvement en cours et que l'utilisateur est le chauffeur
+    if (
+      movement && 
+      movement.status === 'in-progress' && 
+      currentUser.role === 'driver' && 
+      movement.userId && 
+      movement.userId._id === currentUser._id
+    ) {
+      console.log('Démarrage du tracking pour le mouvement:', movement._id);
+      
+      // Fonction pour envoyer la position actuelle
+      const sendCurrentPosition = () => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                await trackingService.sendLocation(movement._id, {
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude,
+                  speed: position.coords.speed || 0
+                });
+                console.log('Position mise à jour');
+              } catch (err) {
+                console.error('Erreur lors de la mise à jour de la position:', err);
+              }
+            },
+            (err) => {
+              console.error('Erreur de géolocalisation:', err);
+            },
+            { 
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0
+            }
+          );
+        }
+      };
+      
+      // Envoyer la position immédiatement au chargement
+      sendCurrentPosition();
+      
+      // Puis configurer un intervalle (toutes les 30 secondes)
+      const trackingInterval = setInterval(sendCurrentPosition, 30000);
+      
+      // Nettoyage à la démontage du composant
+      return () => clearInterval(trackingInterval);
+    }
+  }, [movement, currentUser]);
+  
 
   async function loadMovement() {
     try {

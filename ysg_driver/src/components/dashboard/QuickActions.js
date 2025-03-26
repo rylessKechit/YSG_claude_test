@@ -17,12 +17,14 @@ const QuickActions = ({ currentUser }) => {
         { path: '/schedule-comparison', icon: 'fas fa-chart-line', title: 'Comparaison pointages' },
         { path: '/admin', icon: 'fas fa-user-shield', title: 'Administration' },
         { path: '/admin/location', icon: 'fas fa-map-marker-alt', title: 'Gestion des emplacements' },
+        { path: '/tracking', icon: 'fas fa-map-marked-alt', title: 'Suivi en temps réel' },
       ],
       'team-leader': [
         { path: '/admin/movements/create', icon: 'fas fa-plus-circle', title: 'Créer un mouvement' },
         { path: '/preparations/create', icon: 'fas fa-tools', title: 'Créer une préparation' },
         { path: '/movement/history', icon: 'fas fa-history', title: 'Historique' },
-        { path: '/profile', icon: 'fas fa-user', title: 'Mon profil' }
+        { path: '/profile', icon: 'fas fa-user', title: 'Mon profil' },
+        { path: '/tracking', icon: 'fas fa-map-marked-alt', title: 'Suivi en temps réel' },
       ],
       preparator: [
         { path: '/preparations/create', icon: 'fas fa-plus-circle', title: 'Créer une préparation' },

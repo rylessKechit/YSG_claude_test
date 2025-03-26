@@ -1,4 +1,5 @@
 export const API_URL = process.env.REACT_APP_API_URL;
+export const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
 // Configuration des endpoints de l'API
 export const ENDPOINTS = {
@@ -59,5 +60,11 @@ export const ENDPOINTS = {
     WHATSAPP: '/admin/whatsapp-status',
     LOCATIONS: '/admin/locations',
     NETWORKS: '/admin/networks'
-  }
+  },
+  TRACKING: {
+    LOCATION: (id) => `/tracking/${id}/location`,
+    LOCATIONS: (id) => `/tracking/${id}/locations`,
+    LATEST_LOCATION: (id) => `/tracking/${id}/location/latest`,
+    ACTIVE_MOVEMENTS: '/tracking/active-movements'
+  },
 };

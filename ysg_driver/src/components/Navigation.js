@@ -18,13 +18,15 @@ const roleLinks = {
     { name: 'Rapports', path: '/reports' },
     { name: 'Planning préparateurs', path: '/schedules' },
     { name: 'Comparaison pointages', path: '/schedule-comparison' },
-    { name: 'Administration', path: '/admin' }
+    { name: 'Administration', path: '/admin' },
+    { name: 'Suivi en temps réel', path: '/tracking' },
   ],
   'team-leader': [
     { name: 'Nouveau mouvement', path: '/admin/movements/create' },
     { name: 'Mouvements', path: '/movement/history' },
     { name: 'Préparations', path: '/preparations' },
-    { name: 'Nouvelle préparation', path: '/preparations/create' }
+    { name: 'Nouvelle préparation', path: '/preparations/create' },
+    { name: 'Suivi en temps réel', path: '/tracking' },
   ],
   driver: [
     { name: 'Mouvements', path: '/movement/history' },
