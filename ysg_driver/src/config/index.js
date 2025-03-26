@@ -52,5 +52,12 @@ export const ENDPOINTS = {
     DRIVER_GLOBAL_METRICS: '/analytics/drivers/global-metrics',
     DESTINATION_STATS: '/analytics/drivers/destination-stats',
     DRIVER_PEAK_HOURS: '/analytics/drivers/peak-hours'
+  },
+  ADMIN: {
+    BASE: '/admin',
+    USERS: '/admin/users',
+    WHATSAPP: '/admin/whatsapp-status',
+    LOCATIONS: '/admin/locations',
+    NETWORKS: '/admin/networks'
   }
 };

@@ -1,4 +1,4 @@
-// server/models/timelog.model.js
+// server/models/timelog.model.js (mise à jour)
 const mongoose = require('mongoose');
 
 const locationSchema = new mongoose.Schema({
@@ -6,7 +6,8 @@ const locationSchema = new mongoose.Schema({
   coordinates: {
     latitude: Number,
     longitude: Number
-  }
+  },
+  ipAddress: String  // Stocker l'IP pour l'audit
 });
 
 const timelogSchema = new mongoose.Schema({

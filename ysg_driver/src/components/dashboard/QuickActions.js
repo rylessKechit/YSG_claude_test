@@ -15,7 +15,8 @@ const QuickActions = ({ currentUser }) => {
         { path: '/reports', icon: 'fas fa-file-excel', title: 'Rapports' },
         { path: '/schedules', icon: 'fas fa-calendar-week', title: 'Planning préparateurs' },
         { path: '/schedule-comparison', icon: 'fas fa-chart-line', title: 'Comparaison pointages' },
-        { path: '/admin', icon: 'fas fa-user-shield', title: 'Administration' }
+        { path: '/admin', icon: 'fas fa-user-shield', title: 'Administration' },
+        { path: '/admin/location', icon: 'fas fa-map-marker-alt', title: 'Gestion des emplacements' },
       ],
       'team-leader': [
         { path: '/admin/movements/create', icon: 'fas fa-plus-circle', title: 'Créer un mouvement' },
