@@ -751,3 +751,5 @@ const LocationSettings = () => {
     </div>
     );
 };
+
+export default LocationSettings;

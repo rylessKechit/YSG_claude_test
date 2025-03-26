@@ -1,8 +1,12 @@
-// server/routes/admin.routes.js (créez ce fichier s'il n'existe pas)
+// server/routes/admin.routes.js
 const express = require('express');
 const router = express.Router();
 const { isAdmin } = require('../middleware/auth.middleware');
 const whatsAppService = require('../services/whatsapp.service');
+const locationRoutes = require('./admin.location.routes');
+
+// Utiliser les routes pour la gestion des emplacements et réseaux
+router.use('/', locationRoutes);
 
 // Route pour vérifier le statut de WhatsApp et obtenir le QR code
 router.get('/whatsapp-status', isAdmin, (req, res) => {
@@ -25,7 +29,7 @@ router.get('/whatsapp-status', isAdmin, (req, res) => {
   }
 });
 
-// Nouvelle route pour déconnecter WhatsApp
+// Route pour déconnecter WhatsApp
 router.post('/whatsapp-disconnect', isAdmin, async (req, res) => {
   try {
     if (!whatsAppService.isClientReady()) {
@@ -44,6 +48,5 @@ router.post('/whatsapp-disconnect', isAdmin, async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
-
 
 module.exports = router;
