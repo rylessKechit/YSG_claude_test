@@ -1,70 +1,166 @@
-// server/middleware/upload.middleware.js
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+// server/routes/upload.routes.js - correction de l'utilisation de uploadMiddleware
 
-// S'assurer que le dossier uploads existe
-const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const express = require('express');
+const router = express.Router();
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { v4: uuidv4 } = require('uuid');
+const { verifyToken } = require('../middleware/auth.middleware');
+const uploadMiddleware = require('../middleware/upload.middleware');
+const path = require('path');
+require('dotenv').config();
+
+// Configuration S3
+const bucketName = process.env.AWS_S3_BUCKET;
+const region = process.env.AWS_REGION || 'eu-west-3';
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+// Initialiser le client S3 si les variables sont définies
+let s3Client;
+if (bucketName && accessKeyId && secretAccessKey) {
+  try {
+    s3Client = new S3Client({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey
+      }
+    });
+    console.log('✅ Client S3 initialisé pour les routes d\'upload');
+  } catch (error) {
+    console.error('❌ Erreur S3 (routes d\'upload):', error.message);
+  }
 }
 
-// Configuration pour le stockage local (fallback)
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const userId = req.user ? req.user._id : 'unknown';
-    const taskType = req.params ? req.params.taskType || 'general' : 'general';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    cb(null, `user-${userId}-${taskType}-${uniqueSuffix}${extension}`);
-  }
-});
-
-// Filtre pour accepter uniquement les images
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Seules les images sont autorisées!'), false);
-  }
+// Vérifier si S3 est configuré correctement
+const isS3Configured = () => {
+  return !!s3Client;
 };
 
-// Middleware multer simple avec stockage local
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-    files: 10 // Max 10 fichiers par requête
-  },
-  fileFilter: fileFilter
-});
-
-// Exposer le middleware en tant que fonction
-const uploadMiddleware = (req, res, next) => {
-  // Utiliser la fonction array de multer
-  upload.array('photos', 10)(req, res, function(err) {
-    if (err) {
-      console.error('Erreur dans uploadMiddleware:', err);
-      return next(err);
+// Route pour générer des URLs présignées pour S3
+router.post('/presigned-url', verifyToken, async (req, res) => {
+  try {
+    if (!isS3Configured()) {
+      return res.status(500).json({ 
+        message: 'S3 n\'est pas configuré sur le serveur' 
+      });
     }
+
+    const { fileType, fileName } = req.body;
     
-    // Traiter les fichiers pour normaliser la structure
-    if (req.files && req.files.length > 0) {
-      req.files = req.files.map(file => {
-        // Assurer que chaque fichier a une propriété url
-        return {
-          ...file,
-          url: `/uploads/${file.filename}`,
-          location: `/uploads/${file.filename}`
-        };
+    // Validation
+    if (!fileType || !fileName) {
+      return res.status(400).json({ 
+        message: 'Le type et le nom du fichier sont requis' 
       });
     }
     
-    next();
-  });
-};
+    // Extraire l'extension du nom de fichier
+    const fileExtension = path.extname(fileName);
+    
+    // Créer un nom de fichier unique
+    const key = `uploads/user-${req.user._id}/${Date.now()}-${uuidv4()}${fileExtension}`;
+    
+    // Créer la commande pour obtenir une URL présignée
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      ContentType: fileType,
+    });
+    
+    // Génération de l'URL présignée (valide 5 minutes)
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+    
+    // Construire l'URL publique pour le fichier
+    const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+    
+    res.json({
+      presignedUrl,
+      fileUrl,
+      key
+    });
+  } catch (error) {
+    console.error('Erreur lors de la génération de l\'URL présignée:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la génération de l\'URL présignée', 
+      error: error.message 
+    });
+  }
+});
 
-module.exports = uploadMiddleware;
+// Route d'upload standard (si vous préférez ne pas utiliser les URLs présignées)
+router.post('/single', verifyToken, uploadMiddleware.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Aucun fichier n\'a été téléchargé' });
+    }
+    
+    let fileUrl;
+    
+    // Déterminer l'URL du fichier en fonction du type de stockage
+    if (req.file.location) {
+      // Fichier uploadé sur S3
+      fileUrl = req.file.location;
+    } else if (req.file.path) {
+      // Fichier stocké localement
+      fileUrl = `${req.protocol}://${req.get('host')}/${req.file.path}`;
+    } else {
+      return res.status(500).json({ message: 'Erreur lors de la détermination de l\'URL du fichier' });
+    }
+    
+    res.json({
+      message: 'Fichier uploadé avec succès',
+      file: {
+        url: fileUrl,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'upload du fichier:', error);
+    res.status(500).json({ message: 'Erreur lors de l\'upload du fichier' });
+  }
+});
+
+// Route d'upload multiple
+router.post('/multiple', verifyToken, uploadMiddleware.array('files', 10), (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'Aucun fichier n\'a été téléchargé' });
+    }
+    
+    const files = req.files.map(file => {
+      let fileUrl;
+      
+      // Déterminer l'URL du fichier en fonction du type de stockage
+      if (file.location) {
+        // Fichier uploadé sur S3
+        fileUrl = file.location;
+      } else if (file.path) {
+        // Fichier stocké localement
+        fileUrl = `${req.protocol}://${req.get('host')}/${file.path}`;
+      } else {
+        fileUrl = null;
+      }
+      
+      return {
+        url: fileUrl,
+        originalName: file.originalname,
+        size: file.size,
+        mimetype: file.mimetype
+      };
+    });
+    
+    res.json({
+      message: `${files.length} fichiers uploadés avec succès`,
+      files
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'upload des fichiers:', error);
+    res.status(500).json({ message: 'Erreur lors de l\'upload des fichiers' });
+  }
+});
+
+module.exports = router;

@@ -1,4 +1,4 @@
-const router=require('express').Router(),Movement=require('../models/movement.model'),TimeLog=require('../models/timelog.model'),User=require('../models/user.model'),{verifyToken,canCreateMovement,canAssignMovement}=require('../middleware/auth.middleware'),upload=require('../middleware/upload.middleware'),whatsAppService=require('../services/whatsapp.service');
+const router=require('express').Router(),Movement=require('../models/movement.model'),TimeLog=require('../models/timelog.model'),User=require('../models/user.model'),{verifyToken,canCreateMovement,canAssignMovement}=require('../middleware/auth.middleware'),uploadMiddleware=require('../middleware/upload.middleware'),whatsAppService=require('../services/whatsapp.service');
 
 const checkDriverActiveTimeLog=async id=>await TimeLog.findOne({userId:id,status:'active'});
 
@@ -219,7 +219,7 @@ router.post('/:id/cancel',verifyToken,canCreateMovement,async(req,res)=>{
 });
 
 // Upload de photos
-router.post('/:id/photos',verifyToken,upload.array('photos',5),async(req,res)=>{
+router.post('/:id/photos',verifyToken,uploadMiddleware.array('photos', 5),async(req,res)=>{
   try{
     const movement=await Movement.findById(req.params.id);
     if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
@@ -346,7 +346,7 @@ router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
 });
 
 // Upload batch de photos
-router.post('/:id/photos/batch', verifyToken, upload.array('photos'), async (req, res) => {
+router.post('/:id/photos/batch', verifyToken, uploadMiddleware.array('photos'), async (req, res) => {
   try {
     const movement = await Movement.findById(req.params.id);
     if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
@@ -470,6 +470,117 @@ router.get('/:id',verifyToken,async(req,res)=>{
   }catch(e){
     console.error('Erreur lors de la récupération du mouvement:',e);
     res.status(500).json({message:'Erreur serveur'});
+  }
+});
+
+// Routes S3 pour movement.routes.js (à ajouter)
+
+// Enregistrer des photos S3 uploadées directement
+router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
+  try {
+    const movement = await Movement.findById(req.params.id);
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    
+    if (req.user.role !== 'admin' && (!movement.userId || movement.userId.toString() !== req.user._id.toString()))
+      return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier ce mouvement' });
+    
+    if (movement.status !== 'preparing' && movement.status !== 'in-progress')
+      return res.status(400).json({ message: 'Vous ne pouvez ajouter des photos qu\'à un mouvement en préparation ou en cours' });
+    
+    const allowedTypes = ['front', 'passenger', 'driver', 'rear', 'windshield', 'roof', 'meter', 'damage', 'other'];
+    const { photoType = 'departure' } = req.body;
+    
+    // Récupérer les URLs et les types
+    const photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
+    const photoTypes = Array.isArray(req.body.photoTypes) ? req.body.photoTypes : [req.body.photoTypes];
+    
+    if (photoUrls.length === 0) {
+      return res.status(400).json({ message: 'Aucune photo n\'a été fournie' });
+    }
+    
+    if (photoTypes.length !== photoUrls.length) {
+      return res.status(400).json({ message: 'Le nombre de types ne correspond pas au nombre de photos' });
+    }
+    
+    // Créer un tableau de photos à ajouter au mouvement
+    const photos = photoUrls.map((url, index) => {
+      const type = photoTypes[index];
+      
+      if (!allowedTypes.includes(type)) {
+        return null; // Filtrer les types non valides
+      }
+      
+      return {
+        url,           // URL S3 du fichier
+        type,
+        photoType,
+        timestamp: new Date()
+      };
+    }).filter(photo => photo !== null); // Éliminer les entrées nulles
+    
+    // Ajouter les photos
+    movement.photos.push(...photos);
+    await movement.save();
+    
+    res.json({ 
+      message: `${photos.length} photos ajoutées avec succès via S3`, 
+      photosUploaded: photos.length,
+      photos: movement.photos 
+    });
+  } catch (e) {
+    console.error('Erreur lors de l\'enregistrement des photos S3:', e);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement des photos' });
+  }
+});
+
+// Une route spécifique pour uploader individuellement via S3
+router.post('/:id/photos/s3', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { photoUrl, type = 'other', photoType = 'departure' } = req.body;
+    
+    if (!photoUrl) {
+      return res.status(400).json({ message: 'URL de photo requise' });
+    }
+    
+    const movement = await Movement.findById(id);
+    if (!movement) {
+      return res.status(404).json({ message: 'Mouvement non trouvé' });
+    }
+    
+    if (req.user.role !== 'admin' && (!movement.userId || movement.userId.toString() !== req.user._id.toString())) {
+      return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier ce mouvement' });
+    }
+    
+    if (movement.status !== 'preparing' && movement.status !== 'in-progress') {
+      return res.status(400).json({ message: 'Vous ne pouvez ajouter des photos qu\'à un mouvement en préparation ou en cours' });
+    }
+    
+    const allowedTypes = ['front', 'passenger', 'driver', 'rear', 'windshield', 'roof', 'meter', 'damage', 'other'];
+    
+    if (!allowedTypes.includes(type)) {
+      return res.status(400).json({ message: 'Type de photo non valide' });
+    }
+    
+    // Créer l'objet photo
+    const photo = {
+      url: photoUrl,
+      type,
+      photoType,
+      timestamp: new Date()
+    };
+    
+    // Ajouter la photo
+    movement.photos.push(photo);
+    await movement.save();
+    
+    res.json({
+      message: 'Photo ajoutée avec succès via S3',
+      photo
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'ajout de la photo via S3:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 

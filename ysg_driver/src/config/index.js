@@ -23,14 +23,17 @@ export const ENDPOINTS = {
     DETAIL: (id) => `/movements/${id}`,
     PHOTOS: (id) => `/movements/${id}/photos`,
     BATCH_PHOTOS: (id) => `/movements/${id}/photos/batch`,
-    BATCH_S3_PHOTOS: (id) => `/movements/${id}/photos/batch-s3` // Nouvel endpoint pour S3 direct
+    BATCH_S3_PHOTOS: (id) => `/movements/${id}/photos/batch-s3` // Endpoint pour S3 direct
   },
   PREPARATIONS: {
     BASE: '/preparations',
     DETAIL: (id) => `/preparations/${id}`,
     PHOTOS: (id) => `/preparations/${id}/photos`,
+    PHOTOS_S3: (id) => `/preparations/${id}/photos-with-s3`, // Nouvel endpoint S3
     BATCH_PHOTOS: (id) => `/preparations/${id}/photos/batch`,
-    TASKS: (id) => `/preparations/${id}/tasks`
+    BATCH_PHOTOS_S3: (id) => `/preparations/${id}/photos/batch-s3`, // Nouvel endpoint batch S3
+    TASKS: (id) => `/preparations/${id}/tasks`,
+    TASK_S3: (id, taskType, action) => `/preparations/${id}/tasks/${taskType}/${action}-with-s3` // Endpoint task avec S3
   },
   REPORTS: {
     MOVEMENTS: '/reports/movements',

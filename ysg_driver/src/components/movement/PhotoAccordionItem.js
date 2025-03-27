@@ -174,10 +174,8 @@ const PhotoAccordionItem = ({
                 {/* Bouton d'upload individuel - caché en mode localPreviewOnly */}
                 {!localPreviewOnly && (
                   <button 
-                    className="btn btn-primary upload-photo-btn"
-                    disabled={!selectedFile || uploadingPhoto}
-                    onClick={onUploadPhoto}
-                    style={{ marginTop: '10px' }}
+                    onClick={() => localPreviewOnly ? null : onUploadPhoto()}
+                    className="btn btn-primary"
                   >
                     {uploadingPhoto ? 'Chargement...' : 'Valider la photo'}
                   </button>
