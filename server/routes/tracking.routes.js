@@ -105,6 +105,7 @@ router.get('/:movementId/location/latest', verifyToken, checkMovementAccess, asy
 });
 
 // Récupérer tous les mouvements en cours avec leur dernière position
+// Récupérer tous les mouvements actifs avec leur dernière position
 router.get('/active-movements', verifyToken, async (req, res) => {
   try {
     // Seuls les admins et team leaders peuvent voir tous les mouvements actifs
@@ -127,6 +128,12 @@ router.get('/active-movements', verifyToken, async (req, res) => {
         const latestLocation = await DriverLocation.findOne({ movementId: movement._id })
           .sort({ timestamp: -1 })
           .lean();
+        
+        // S'assurer que les coordonnées sont des nombres
+        if (latestLocation && latestLocation.location) {
+          latestLocation.location.latitude = parseFloat(latestLocation.location.latitude);
+          latestLocation.location.longitude = parseFloat(latestLocation.location.longitude);
+        }
         
         return {
           ...movement,
