@@ -290,6 +290,115 @@ router.post('/:id/reassign',verifyToken,canCreateMovement,async(req,res)=>{
   }
 });
 
+// Enregistrer des photos S3 uploadées directement
+router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
+  try {
+    const movement = await Movement.findById(req.params.id);
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    
+    if (req.user.role !== 'admin' && (!movement.userId || movement.userId.toString() !== req.user._id.toString()))
+      return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier ce mouvement' });
+    
+    if (movement.status !== 'preparing' && movement.status !== 'in-progress')
+      return res.status(400).json({ message: 'Vous ne pouvez ajouter des photos qu\'à un mouvement en préparation ou en cours' });
+    
+    const allowedTypes = ['front', 'passenger', 'driver', 'rear', 'windshield', 'roof', 'meter', 'damage', 'other'];
+    const { photoType = 'departure' } = req.body;
+    
+    // Récupérer les URLs et les types
+    const photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
+    const photoTypes = Array.isArray(req.body.photoTypes) ? req.body.photoTypes : [req.body.photoTypes];
+    
+    if (photoUrls.length === 0)
+      return res.status(400).json({ message: 'Aucune photo n\'a été fournie' });
+    
+    if (photoTypes.length !== photoUrls.length)
+      return res.status(400).json({ message: 'Le nombre de types ne correspond pas au nombre de photos' });
+    
+    // Créer un tableau de photos à ajouter au mouvement
+    const photos = photoUrls.map((url, index) => {
+      const type = photoTypes[index];
+      
+      if (!allowedTypes.includes(type))
+        return null; // Filtrer les types non valides
+      
+      return {
+        url,           // URL S3 du fichier
+        type,
+        photoType,
+        timestamp: new Date()
+      };
+    }).filter(photo => photo !== null); // Éliminer les entrées nulles
+    
+    // Ajouter les photos
+    movement.photos.push(...photos);
+    await movement.save();
+    
+    res.json({ 
+      message: `${photos.length} photos ajoutées avec succès`, 
+      photosUploaded: photos.length,
+      photos: movement.photos 
+    });
+  } catch (e) {
+    console.error('Erreur lors de l\'enregistrement des photos S3:', e);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement des photos' });
+  }
+});
+
+// Upload batch de photos
+router.post('/:id/photos/batch', verifyToken, upload.array('photos'), async (req, res) => {
+  try {
+    const movement = await Movement.findById(req.params.id);
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    
+    if (req.user.role !== 'admin' && (!movement.userId || movement.userId.toString() !== req.user._id.toString()))
+      return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier ce mouvement' });
+    
+    if (movement.status !== 'preparing' && movement.status !== 'in-progress')
+      return res.status(400).json({ message: 'Vous ne pouvez ajouter des photos qu\'à un mouvement en préparation ou en cours' });
+    
+    const allowedTypes = ['front', 'passenger', 'driver', 'rear', 'windshield', 'roof', 'meter', 'damage', 'other'];
+    const { photoType = 'departure' } = req.body;
+    
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ message: 'Aucune photo n\'a été téléchargée' });
+    
+    // Récupérer les types associés à chaque photo
+    const photoTypes = Array.isArray(req.body.photoTypes) ? req.body.photoTypes : [req.body.photoTypes];
+    
+    if (photoTypes.length !== req.files.length)
+      return res.status(400).json({ message: 'Le nombre de types ne correspond pas au nombre de photos' });
+    
+    // Créer un tableau de photos à ajouter au mouvement
+    const photos = req.files.map((file, index) => {
+      const type = photoTypes[index];
+      
+      if (!allowedTypes.includes(type))
+        return null; // Filtrer les types non valides
+      
+      return {
+        url: file.path,
+        type,
+        photoType,
+        timestamp: new Date()
+      };
+    }).filter(photo => photo !== null); // Éliminer les entrées nulles
+    
+    // Ajouter les photos
+    movement.photos.push(...photos);
+    await movement.save();
+    
+    res.json({ 
+      message: `${photos.length} photos ajoutées avec succès`, 
+      photosUploaded: photos.length,
+      photos: movement.photos 
+    });
+  } catch (e) {
+    console.error('Erreur lors de l\'upload batch des photos:', e);
+    res.status(500).json({ message: 'Erreur serveur lors de l\'upload des photos' });
+  }
+});
+
 // Obtenir tous les mouvements
 router.get('/',verifyToken,async(req,res)=>{
   try{

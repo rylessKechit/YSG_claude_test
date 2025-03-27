@@ -147,6 +147,59 @@ const MovementDetail = () => {
     }
   }
 
+  // Gestion de l'upload groupé des photos
+  const handleBatchPhotoUpload = async (isArrival = false) => {
+    try {
+      setUpdateLoading(true);
+      setError(null);
+      
+      const photoFiles = isArrival ? selectedArrivalPhotoFiles : selectedPhotoFiles;
+      const setPhotoStatus = isArrival ? setArrivalPhotosStatus : setPhotosStatus;
+      const setPhotoFiles = isArrival ? setSelectedArrivalPhotoFiles : setSelectedPhotoFiles;
+      
+      // Créer un FormData contenant toutes les photos
+      const formData = new FormData();
+      
+      // Ajouter chaque photo au FormData avec son type
+      Object.entries(photoFiles).forEach(([type, file]) => {
+        if (file) {
+          // Utiliser un nom de champ qui inclut le type de photo
+          formData.append('photos', file);
+          formData.append('photoTypes', type);
+        }
+      });
+      
+      // Ajouter le flag pour indiquer si ce sont des photos d'arrivée
+      if (isArrival) {
+        formData.append('photoType', 'arrival');
+      }
+      
+      // Appel API pour uploader toutes les photos
+      await movementService.uploadAllPhotos(id, formData);
+      
+      // Mise à jour de l'état pour toutes les photos uploadées
+      const updatedPhotoStatus = isArrival ? { ...arrivalPhotosStatus } : { ...photosStatus };
+      Object.keys(photoFiles).forEach(type => {
+        if (photoFiles[type]) {
+          updatedPhotoStatus[type] = true;
+        }
+      });
+      setPhotoStatus(updatedPhotoStatus);
+      
+      // Réinitialiser les fichiers sélectionnés
+      setPhotoFiles(initialPhotoState);
+      
+      setUpdateSuccess(`Photos ${isArrival ? 'd\'arrivée ' : 'de départ '} téléchargées avec succès`);
+      setTimeout(() => setUpdateSuccess(null), 3000);
+      
+      await loadMovement();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Erreur lors de l\'upload des photos');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
   // Gestion des actions
   const handleAction = async (actionType, ...params) => {
     try {
@@ -327,7 +380,7 @@ const MovementDetail = () => {
           
           {/* Photos au départ */}
           {movement.status === 'preparing' && movement.userId && 
-           currentUser.role === 'driver' && movement.userId._id === currentUser._id && (
+          currentUser.role === 'driver' && movement.userId._id === currentUser._id && (
             <PhotoUploadSection
               movement={movement}
               photosStatus={photosStatus}
@@ -335,12 +388,12 @@ const MovementDetail = () => {
               selectedFiles={selectedPhotoFiles}
               onExpandSection={(section) => handleExpandPhotoSection(section)}
               onSelectPhoto={(type, file) => handleSelectPhoto(type, file)}
-              onUploadPhoto={(type) => handlePhotoOperation('upload', false, type)}
+              onUploadAllPhotos={() => handleBatchPhotoUpload(false)} // Nouvel handler pour l'upload groupé
               onResetPhotoStatus={(type) => handlePhotoOperation('reset', false, type)}
-              uploadingPhoto={uploadingPhoto}
+              uploadingPhotos={updateLoading} // Utilisez updateLoading pour l'état du bouton
               getPhotoUrlByType={(type) => getPhotoUrlByType(type)}
               sectionTitle="Photos du véhicule au départ"
-              instructionText="Prenez les photos suivantes du véhicule avant le départ."
+              instructionText="Prenez toutes les photos suivantes du véhicule avant le départ, puis uploadez-les en une seule fois."
             />
           )}
 
@@ -354,12 +407,12 @@ const MovementDetail = () => {
               selectedFiles={selectedArrivalPhotoFiles}
               onExpandSection={(section) => handleExpandPhotoSection(section, true)}
               onSelectPhoto={(type, file) => handleSelectPhoto(type, file, true)}
-              onUploadPhoto={(type) => handlePhotoOperation('upload', true, type)}
+              onUploadAllPhotos={() => handleBatchPhotoUpload(true)} // Nouvel handler pour l'upload groupé
               onResetPhotoStatus={(type) => handlePhotoOperation('reset', true, type)}
-              uploadingPhoto={uploadingArrivalPhoto}
+              uploadingPhotos={updateLoading} // Utilisez updateLoading pour l'état du bouton
               getPhotoUrlByType={(type) => getPhotoUrlByType(type, true)}
               sectionTitle="Photos du véhicule à l'arrivée"
-              instructionText="Prenez les photos suivantes du véhicule à l'arrivée."
+              instructionText="Prenez toutes les photos suivantes du véhicule à l'arrivée, puis uploadez-les en une seule fois."
             />
           )}
 

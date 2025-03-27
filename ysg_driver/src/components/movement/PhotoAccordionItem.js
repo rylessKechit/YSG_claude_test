@@ -13,7 +13,8 @@ const PhotoAccordionItem = ({
   onSelectPhoto,
   onUploadPhoto,
   onResetStatus,
-  uploadingPhoto
+  uploadingPhoto,
+  localPreviewOnly = false // Nouveau paramètre indiquant si on est en mode prévisualisation uniquement
 }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
   
@@ -57,24 +58,43 @@ const PhotoAccordionItem = ({
       border: '1px dashed #d1d5db',
       borderRadius: '4px',
       backgroundColor: '#f9fafb'
+    },
+    photoReady: {
+      borderLeft: '4px solid #3b82f6',
+      borderRadius: '8px',
+      overflow: 'hidden'
     }
+  };
+
+  // Déterminer le style de la section en fonction de l'état
+  const getSectionStyle = () => {
+    if (completed) return styles.completedSection;
+    if (selectedFile && localPreviewOnly) return styles.photoReady;
+    return {};
   };
 
   return (
     <div 
       className="photo-accordion-item" 
-      style={completed ? styles.completedSection : {}}
+      style={getSectionStyle()}
     >
       <div 
-        className={`photo-accordion-header ${completed ? 'completed' : ''}`} 
+        className={`photo-accordion-header ${completed ? 'completed' : ''} ${selectedFile && localPreviewOnly ? 'photo-ready' : ''}`} 
         onClick={onToggle}
-        style={completed ? { backgroundColor: '#d1fae5' } : {}}
+        style={completed ? { backgroundColor: '#d1fae5' } : 
+              (selectedFile && localPreviewOnly ? { backgroundColor: '#dbeafe' } : {})}
       >
         <div className="photo-section-title">
           <span className="status-icon">
             <i 
-              className={`fas ${completed ? 'fa-check-circle' : 'fa-circle'}`} 
-              style={{ color: completed ? '#10b981' : '#6b7280' }}
+              className={`fas ${
+                completed ? 'fa-check-circle' : 
+                (selectedFile && localPreviewOnly ? 'fa-camera' : 'fa-circle')
+              }`} 
+              style={{ 
+                color: completed ? '#10b981' : 
+                      (selectedFile && localPreviewOnly ? '#3b82f6' : '#6b7280') 
+              }}
             />
           </span>
           <span>{label}</span>
@@ -82,9 +102,13 @@ const PhotoAccordionItem = ({
         <div className="photo-section-actions">
           <span 
             className="photo-status-text" 
-            style={completed ? { color: '#10b981', fontWeight: '500' } : {}}
+            style={
+              completed ? { color: '#10b981', fontWeight: '500' } : 
+              (selectedFile && localPreviewOnly ? { color: '#3b82f6', fontWeight: '500' } : {})
+            }
           >
-            {completed ? 'Complété' : 'À photographier'}
+            {completed ? 'Uploadée' : 
+             (selectedFile && localPreviewOnly ? 'Prête' : 'À photographier')}
           </span>
           <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`} />
         </div>
@@ -147,14 +171,33 @@ const PhotoAccordionItem = ({
                   </div>
                 )}
                 
-                <button 
-                  className="btn btn-primary upload-photo-btn"
-                  disabled={!selectedFile || uploadingPhoto}
-                  onClick={onUploadPhoto}
-                  style={{ marginTop: '10px' }}
-                >
-                  {uploadingPhoto ? 'Chargement...' : 'Valider la photo'}
-                </button>
+                {/* Bouton d'upload individuel - caché en mode localPreviewOnly */}
+                {!localPreviewOnly && (
+                  <button 
+                    className="btn btn-primary upload-photo-btn"
+                    disabled={!selectedFile || uploadingPhoto}
+                    onClick={onUploadPhoto}
+                    style={{ marginTop: '10px' }}
+                  >
+                    {uploadingPhoto ? 'Chargement...' : 'Valider la photo'}
+                  </button>
+                )}
+                
+                {/* En mode localPreviewOnly, montrer un message de confirmation si une photo est sélectionnée */}
+                {localPreviewOnly && selectedFile && (
+                  <div className="photo-selected-message" style={{ 
+                    color: '#3b82f6', 
+                    padding: '10px', 
+                    backgroundColor: '#eff6ff',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <i className="fas fa-info-circle"></i>
+                    <span>Photo sélectionnée - sera uploadée en une fois avec les autres photos</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

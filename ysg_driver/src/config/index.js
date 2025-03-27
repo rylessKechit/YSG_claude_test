@@ -21,12 +21,15 @@ export const ENDPOINTS = {
   MOVEMENTS: {
     BASE: '/movements',
     DETAIL: (id) => `/movements/${id}`,
-    PHOTOS: (id) => `/movements/${id}/photos`
+    PHOTOS: (id) => `/movements/${id}/photos`,
+    BATCH_PHOTOS: (id) => `/movements/${id}/photos/batch`,
+    BATCH_S3_PHOTOS: (id) => `/movements/${id}/photos/batch-s3` // Nouvel endpoint pour S3 direct
   },
   PREPARATIONS: {
     BASE: '/preparations',
     DETAIL: (id) => `/preparations/${id}`,
     PHOTOS: (id) => `/preparations/${id}/photos`,
+    BATCH_PHOTOS: (id) => `/preparations/${id}/photos/batch`,
     TASKS: (id) => `/preparations/${id}/tasks`
   },
   REPORTS: {
@@ -66,5 +69,11 @@ export const ENDPOINTS = {
     LOCATIONS: (id) => `/tracking/${id}/locations`,
     LATEST_LOCATION: (id) => `/tracking/${id}/location/latest`,
     ACTIVE_MOVEMENTS: '/tracking/active-movements'
+  },
+  UPLOAD: {
+    BASE: '/upload',
+    SINGLE: '/upload/single',
+    MULTIPLE: '/upload/multiple',
+    PRESIGNED_URL: '/upload/presigned-url'
   },
 };

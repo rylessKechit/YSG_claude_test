@@ -106,7 +106,73 @@ const preparationService = {
   
   // Rechercher des préparations par plaque d'immatriculation sans cache
   searchByLicensePlate: async (licensePlate) => 
-    fetchWithCache(`${ENDPOINTS.PREPARATIONS.BASE}/search/plate?licensePlate=${licensePlate}`)
+    fetchWithCache(`${ENDPOINTS.PREPARATIONS.BASE}/search/plate?licensePlate=${licensePlate}`),
+
+  // Upload batch de photos pour une tâche
+  uploadBatchTaskPhotos: async (preparationId, taskType, photos, photoPositions) => {
+    const formData = new FormData();
+
+    // Ajouter chaque photo au formData
+    photos.forEach((photo, index) => {
+      if (photo) {
+        formData.append('photos', photo);
+        formData.append('photoPositions', photoPositions[index]); // before, after ou additional
+      }
+    });
+
+    formData.append('taskType', taskType);
+    
+    const response = await api.post(
+      `${ENDPOINTS.PREPARATIONS.BATCH_PHOTOS(preparationId)}`,
+      formData,
+      { 
+        headers: { 'Content-Type': 'multipart/form-data' },
+        // Ajouter un timeout plus long pour les uploads multiples
+        timeout: 60000 // 60 secondes
+      }
+    );
+    return response.data;
+  },
+  
+  // Compléter une tâche en une seule fois (before + after)
+  completeTaskInOneGo: async (preparationId, taskType, beforePhoto, afterPhoto, additionalData = {}) => {
+    const formData = new FormData();
+    
+    // Ajouter les photos before et after
+    if (beforePhoto) {
+      formData.append('photos', beforePhoto);
+      formData.append('photoPositions', 'before');
+    }
+    
+    if (afterPhoto) {
+      formData.append('photos', afterPhoto);
+      formData.append('photoPositions', 'after');
+    }
+    
+    formData.append('taskType', taskType);
+    
+    // Ajouter les données supplémentaires
+    Object.keys(additionalData).forEach(key => {
+      if (additionalData[key] !== null && additionalData[key] !== undefined) {
+        if (typeof additionalData[key] === 'object') {
+          formData.append(key, JSON.stringify(additionalData[key]));
+        } else {
+          formData.append(key, additionalData[key]);
+        }
+      }
+    });
+    
+    const response = await api.post(
+      `${ENDPOINTS.PREPARATIONS.BATCH_PHOTOS(preparationId)}`,
+      formData,
+      { 
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000 // 60 secondes
+      }
+    );
+    return response.data;
+  },
+
 };
 
 export default preparationService;

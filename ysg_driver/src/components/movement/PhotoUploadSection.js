@@ -1,5 +1,5 @@
 // src/components/movement/PhotoUploadSection.js
-import React from 'react';
+import React, { useState } from 'react';
 import PhotoAccordionItem from './PhotoAccordionItem';
 
 const PhotoUploadSection = ({ 
@@ -8,9 +8,9 @@ const PhotoUploadSection = ({
   selectedFiles,
   onExpandSection, 
   onSelectPhoto, 
-  onUploadPhoto,
+  onUploadAllPhotos,  // Nouvelle prop pour uploader toutes les photos
   onResetPhotoStatus,
-  uploadingPhoto,
+  uploadingPhotos,
   getPhotoUrlByType,
   sectionTitle = "Photos du véhicule",
   instructionText = "Pour continuer ce mouvement, vous devez prendre les photos suivantes du véhicule. Chaque section doit être complétée."
@@ -54,9 +54,16 @@ const PhotoUploadSection = ({
     }
   ];
 
-  // Vérification si toutes les photos ont été prises
-  const allRequiredPhotosTaken = photosStatus && 
-    Object.values(photosStatus).every(status => status === true);
+  // Vérifier si toutes les photos requises ont été prises (mais pas nécessairement uploadées)
+  const allPhotosSelected = photoSections.every(section => 
+    photosStatus[section.type] === true || selectedFiles[section.type]
+  );
+
+  // Vérifier si toutes les photos ont été uploadées
+  const allPhotosUploaded = Object.values(photosStatus).every(status => status === true);
+
+  // Compter le nombre de photos prises mais pas encore uploadées
+  const pendingPhotosCount = Object.values(selectedFiles).filter(file => file !== null).length;
 
   return (
     <div className="detail-section photo-upload-section">
@@ -82,19 +89,34 @@ const PhotoUploadSection = ({
             selectedFile={selectedFiles[section.type]}
             onToggle={() => onExpandSection(section.type)}
             onSelectPhoto={(file) => onSelectPhoto(section.type, file)}
-            onUploadPhoto={() => onUploadPhoto(section.type)}
+            onUploadPhoto={() => {}} // Désactivé - les uploads individuels ne sont plus utilisés
             onResetStatus={() => onResetPhotoStatus(section.type)}
-            uploadingPhoto={uploadingPhoto}
+            uploadingPhoto={false}
+            localPreviewOnly={true} // Nouveau flag pour indiquer qu'on ne fait que prévisualiser sans upload immédiat
           />
         ))}
       </div>
       
-      {/* Section de statut des photos */}
+      {/* Section de statut des photos avec bouton d'upload global */}
       <div className="photos-confirmation-section">
-        {allRequiredPhotosTaken ? (
+        {allPhotosUploaded ? (
           <div className="photos-complete-message">
             <i className="fas fa-check-circle"></i>
-            <span>Toutes les photos requises ont été prises</span>
+            <span>Toutes les photos requises ont été prises et uploadées</span>
+          </div>
+        ) : allPhotosSelected ? (
+          <div className="photos-ready-message">
+            <i className="fas fa-camera-retro"></i>
+            <span>Toutes les photos sont prêtes ({pendingPhotosCount} en attente d'upload)</span>
+            <button 
+              onClick={onUploadAllPhotos}
+              className="btn btn-primary btn-lg btn-block upload-all-photos-btn"
+              disabled={uploadingPhotos || pendingPhotosCount === 0}
+            >
+              {uploadingPhotos ? 
+                'Upload en cours...' : 
+                `Uploader toutes les photos (${pendingPhotosCount})`}
+            </button>
           </div>
         ) : (
           <div className="photos-incomplete-message">
