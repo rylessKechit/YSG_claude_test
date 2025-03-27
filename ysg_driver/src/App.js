@@ -31,6 +31,7 @@ const WhatsAppSetup = lazy(() => import('./pages/WhatsAppSetup'));
 const PreparatorPerformance = lazy(() => import('./pages/PreparatorPerformance'));
 const DriverPerformance = lazy(() => import('./pages/DriverPerformance'));
 const LocationSettings = lazy(() => import('./pages/LocationSettings'));
+const DriverTrackingMap = lazy(() => import('./pages/DriverTrackingMap'));
 
 // Composant de route protégée
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
@@ -77,6 +78,7 @@ const routes = [
   { path: '/admin/whatsapp-setup', element: <WhatsAppSetup />, protected: true, roles: ['admin'] },
   { path: '/admin/movements/create', element: <AdminMovementCreate />, protected: true, roles: ['admin', 'team-leader'] },
   { path: '/admin/location', element: <LocationSettings />, protected: true, roles: ['admin'] },
+  { path: '/tracking', element: <DriverTrackingMap />, protected: true, roles: ['admin', 'team-leader'] },
   
   // Routes Rapports (Admin et Direction)
   { path: '/reports', element: <Reports />, protected: true, roles: ['admin', 'direction'] },

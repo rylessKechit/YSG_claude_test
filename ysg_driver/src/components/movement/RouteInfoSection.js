@@ -39,8 +39,6 @@ const RouteInfoSection = ({ movement }) => {
           time={movement.departureTime} 
         />
         
-        <div className="route-line"></div>
-        
         <RoutePoint 
           type="arrival" 
           location={movement.arrivalLocation} 
