@@ -14,7 +14,6 @@ const preparationService = {
    */
   startTaskWithDirectS3: async (preparationId, taskType, photo, notes = '') => {
     try {
-      console.log(`Démarrage de la tâche ${taskType} avec upload S3 direct`);
       
       // 1. Upload direct à S3
       const uploadResult = await uploadService.uploadDirect(photo);
@@ -46,7 +45,6 @@ const preparationService = {
    */
   completeTaskWithDirectS3: async (preparationId, taskType, photo, additionalData = {}) => {
     try {
-      console.log(`Completion de la tâche ${taskType} avec upload S3 direct`);
       
       // 1. Upload direct à S3
       const uploadResult = await uploadService.uploadDirect(photo);
@@ -89,28 +87,27 @@ const preparationService = {
   getPreparatorsOnDuty: async () => fetchWithCache(`${ENDPOINTS.PREPARATIONS.BASE}/preparators-on-duty`),
   
   /**
-   * Démarrer une tâche (méthode standard via serveur)
+   * Démarrer une tâche (sans photo requise)
    * @param {string} preparationId - ID de la préparation
    * @param {string} taskType - Type de tâche
-   * @param {File} photo - Fichier photo "before"
    * @param {string} notes - Notes optionnelles
    * @returns {Promise} Résultat de l'opération
    */
-  startTask: async (preparationId, taskType, photo, notes) => {
-    const formData = new FormData();
-    formData.append('photos', photo);
-    if (notes) formData.append('notes', notes);
-    
-    const response = await api.post(
-      `${ENDPOINTS.PREPARATIONS.DETAIL(preparationId)}/tasks/${taskType}/start`,
-      formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
-    );
-    return response.data;
+  startTask: async (preparationId, taskType, notes = '') => {
+    try {
+      const response = await api.post(
+        `${ENDPOINTS.PREPARATIONS.DETAIL(preparationId)}/tasks/${taskType}/start`,
+        { notes }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Erreur lors du démarrage de la tâche ${taskType}:`, error);
+      throw error;
+    }
   },
   
   /**
-   * Terminer une tâche (méthode standard via serveur)
+   * Terminer une tâche (photo requise)
    * @param {string} preparationId - ID de la préparation
    * @param {string} taskType - Type de tâche
    * @param {File} photo - Fichier photo "after"

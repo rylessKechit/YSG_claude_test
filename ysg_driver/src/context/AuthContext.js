@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useState, useContext, useEffect, useMemo, useRef } from 'react';
 import authService from '../services/authService';
 
 // Création du contexte
@@ -12,14 +12,18 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const authCheckPerformed = useRef(false);
   
   // Vérifier l'authentification au chargement
   useEffect(() => {
+    if (authCheckPerformed.current) return;
+
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
       
       if (!token) {
         setLoading(false);
+        authCheckPerformed.current = true;
         return;
       }
       
@@ -31,6 +35,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('token');
       } finally {
         setLoading(false);
+        authCheckPerformed.current = true;
       }
     };
     

@@ -79,59 +79,43 @@ router.get('/preparators-on-duty', verifyToken, isAdmin, async (req, res) => {
 });
 
 // Commencer une tâche (avec photo "before")
-router.post('/:id/tasks/:taskType/start', verifyToken, (req, res) => {
-  // Utiliser le middleware d'upload pour gérer les photos
-  uploadMiddleware.single('photos')(req, res, async (err) => {
-    try {
-      if (err) {
-        console.error('Erreur d\'upload:', err);
-        return res.status(400).json({ message: `Erreur lors de l'upload: ${err.message}` });
-      }
-      
-      const { id, taskType } = req.params;
-      const { notes } = req.body;
-      
-      const preparation = await Preparation.findById(id);
-      if (!preparation) return res.status(404).json({ message: 'Préparation non trouvée' });
-      
-      const permError = checkPermissions(preparation, req.user._id, req.user.role, res);
-      if (permError) return permError;
-      
-      const validTasks = ['exteriorWashing', 'interiorCleaning', 'refueling', 'parking'];
-      if (!validTasks.includes(taskType)) return res.status(400).json({ message: 'Type de tâche invalide' });
-      
-      if (!preparation.tasks[taskType]) preparation.tasks[taskType] = { status: 'not_started', photos: { additional: [] } };
-      
-      if (preparation.tasks[taskType].status !== 'not_started')
-        return res.status(400).json({ message: `La tâche ${taskType} est déjà ${preparation.tasks[taskType].status === 'in_progress' ? 'en cours' : 'terminée'}` });
-      
-      if (!req.file) return res.status(400).json({ message: 'Une photo "before" est requise pour commencer la tâche' });
-      
-      preparation.tasks[taskType].status = 'in_progress';
-      preparation.tasks[taskType].startedAt = new Date();
-      preparation.tasks[taskType].notes = notes || preparation.tasks[taskType].notes;
-      
-      if (!preparation.tasks[taskType].photos) preparation.tasks[taskType].photos = { additional: [] };
-      
-      // Gestion des différents formats d'URL selon le fournisseur de stockage (S3, Cloudinary, local)
-      preparation.tasks[taskType].photos.before = {
-        url: req.file.location || req.file.path || req.file.url, // Supporte S3, Cloudinary et local
-        timestamp: new Date()
-      };
-      
-      if (preparation.status === 'pending') {
-        preparation.status = 'in-progress';
-        preparation.startTime = new Date();
-      }
-      
-      await preparation.save();
-      
-      res.json({ message: `Tâche ${taskType} commencée avec succès`, preparation });
-    } catch (e) {
-      console.error('Erreur lors du démarrage de la tâche:', e);
-      res.status(500).json({ message: `Erreur lors du démarrage de la tâche: ${e.message}` });
+router.post('/:id/tasks/:taskType/start', verifyToken, async (req, res) => {
+  try {
+    const { id, taskType } = req.params;
+    const { notes } = req.body;
+    
+    const preparation = await Preparation.findById(id);
+    if (!preparation) return res.status(404).json({ message: 'Préparation non trouvée' });
+    
+    const permError = checkPermissions(preparation, req.user._id, req.user.role, res);
+    if (permError) return permError;
+    
+    const validTasks = ['exteriorWashing', 'interiorCleaning', 'refueling', 'parking'];
+    if (!validTasks.includes(taskType)) return res.status(400).json({ message: 'Type de tâche invalide' });
+    
+    if (!preparation.tasks[taskType]) preparation.tasks[taskType] = { status: 'not_started', photos: { additional: [] } };
+    
+    if (preparation.tasks[taskType].status !== 'not_started')
+      return res.status(400).json({ message: `La tâche ${taskType} est déjà ${preparation.tasks[taskType].status === 'in_progress' ? 'en cours' : 'terminée'}` });
+    
+    preparation.tasks[taskType].status = 'in_progress';
+    preparation.tasks[taskType].startedAt = new Date();
+    preparation.tasks[taskType].notes = notes || preparation.tasks[taskType].notes;
+    
+    if (!preparation.tasks[taskType].photos) preparation.tasks[taskType].photos = { additional: [] };
+    
+    if (preparation.status === 'pending') {
+      preparation.status = 'in-progress';
+      preparation.startTime = new Date();
     }
-  });
+    
+    await preparation.save();
+    
+    res.json({ message: `Tâche ${taskType} commencée avec succès`, preparation });
+  } catch (e) {
+    console.error('Erreur lors du démarrage de la tâche:', e);
+    res.status(500).json({ message: `Erreur lors du démarrage de la tâche: ${e.message}` });
+  }
 });
 
 // Terminer une tâche (avec photo "after")

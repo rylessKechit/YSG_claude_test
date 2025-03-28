@@ -1,5 +1,5 @@
 // src/pages/Dashboard.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import timelogService from '../services/timelogService';
 import movementService from '../services/movementService';
@@ -25,50 +25,64 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { currentUser } = useAuth();
+  const isInitialMount = useRef(true);
+  const isFetchingData = useRef(false);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        
-        // 1. Récupérer le pointage actif
-        const timeLog = await timelogService.getActiveTimeLog()
-          .catch(err => err.response?.status === 404 ? null : Promise.reject(err));
-        setActiveTimeLog(timeLog);
-        
-        // 2. Charger les mouvements selon le rôle
-        if (['driver', 'team-leader', 'admin'].includes(currentUser?.role)) {
-          const { movements = [] } = await movementService.getMovements(1, 30);
-          
-          setMovementsData({
-            assigned: movements.filter(m => m.status === 'assigned'),
-            inProgress: movements.filter(m => m.status === 'in-progress'),
-            recent: movements.filter(m => m.status === 'completed').slice(0, 3)
-          });
-        }
-        
-        // 3. Charger les préparations si nécessaire
-        if (['preparator', 'driver', 'team-leader', 'admin'].includes(currentUser?.role)) {
-          const { preparations = [] } = await preparationService.getPreparations(1, 50);
-          
-          setPreparationsData({
-            inProgress: preparations.filter(p => p.status === 'in-progress').slice(0, 3),
-            recent: preparations.filter(p => p.status === 'completed').slice(0, 3)
-          });
-        }
-      } catch (err) {
-        console.error('Erreur lors du chargement des données:', err);
-        setError('Erreur lors du chargement des données');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Utiliser useCallback pour éviter les recréations de la fonction entre les rendus
+  const fetchDashboardData = useCallback(async () => {
+    // Éviter les appels concurrents
+    if (isFetchingData.current) return;
     
-    currentUser && fetchDashboardData();
+    try {
+      isFetchingData.current = true;
+      setLoading(true);
+      
+      // 1. Récupérer le pointage actif
+      const timeLog = await timelogService.getActiveTimeLog()
+        .catch(err => err.response?.status === 404 ? null : Promise.reject(err));
+      setActiveTimeLog(timeLog);
+      
+      // 2. Charger les mouvements selon le rôle
+      if (currentUser && ['driver', 'team-leader', 'admin'].includes(currentUser.role)) {
+        const { movements = [] } = await movementService.getMovements(1, 30);
+        
+        setMovementsData({
+          assigned: movements.filter(m => m.status === 'assigned'),
+          inProgress: movements.filter(m => m.status === 'in-progress'),
+          recent: movements.filter(m => m.status === 'completed').slice(0, 3)
+        });
+      }
+      
+      // 3. Charger les préparations si nécessaire
+      if (currentUser && ['preparator', 'driver', 'team-leader', 'admin'].includes(currentUser.role)) {
+        const { preparations = [] } = await preparationService.getPreparations(1, 50);
+        
+        setPreparationsData({
+          inProgress: preparations.filter(p => p.status === 'in-progress').slice(0, 3),
+          recent: preparations.filter(p => p.status === 'completed').slice(0, 3)
+        });
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement des données:', err);
+      setError('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+      isFetchingData.current = false;
+    }
   }, [currentUser]);
+  
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      
+      if (currentUser) {
+        fetchDashboardData();
+      }
+    }
+  }, [currentUser, fetchDashboardData]);
 
-  // Déterminer quels composants afficher selon le rôle
-  const componentsByRole = useMemo(() => {
+  // Reste du code inchangé
+  const componentsByRole = React.useMemo(() => {
     if (!currentUser) return [];
     
     const roleComponents = [{ component: 'greeting', label: 'Greeting' }];
@@ -123,7 +137,7 @@ const Dashboard = () => {
     return components[componentType] || null;
   };
 
-  if (loading) {
+  if (loading && !movementsData.assigned.length && !movementsData.inProgress.length && !preparationsData.inProgress.length) {
     return (
       <div>
         <Navigation />

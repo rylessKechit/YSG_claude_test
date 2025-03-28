@@ -5,8 +5,6 @@ const PreparationTaskSection = ({
   onStartTask, onCompleteTask, onAddTaskPhoto, onParkingTask,
   uploadingPhoto, getPhotoUrlByType
 }) => {
-  const [photoBeforeFile, setPhotoBeforeFile] = useState(null);
-  const [photoBeforePreview, setPhotoBeforePreview] = useState(null);
   const [photoAfterFile, setPhotoAfterFile] = useState(null);
   const [photoAfterPreview, setPhotoAfterPreview] = useState(null);
   const [additionalPhotoFile, setAdditionalPhotoFile] = useState(null);
@@ -26,9 +24,7 @@ const PreparationTaskSection = ({
   // Actions par type
   const handleAction = {
     startTask: () => {
-      onStartTask(taskType, photoBeforeFile, taskNotes);
-      setPhotoBeforeFile(null);
-      setPhotoBeforePreview(null);
+      onStartTask(taskType, taskNotes);
       setTaskNotes('');
     },
     completeTask: () => {
@@ -159,7 +155,7 @@ const PreparationTaskSection = ({
           {/* Actions disponibles selon l'état */}
           {canEdit && preparation.status !== 'completed' && (
             <div className="task-actions">
-              {/* Démarrer une tâche normale */}
+              {/* Démarrer une tâche - SIMPLIFIÉ SANS PHOTO */}
               {task.status === 'not_started' && taskType !== 'parking' && (
                 <div className="task-step">
                   <div className="task-step-header">
@@ -167,37 +163,20 @@ const PreparationTaskSection = ({
                     <span>Commencer {labels.tasks[taskType].toLowerCase()}</span>
                   </div>
                   
-                  <p>Prenez une photo de l'état initial avant de commencer la tâche.</p>
-                  
-                  <div className="task-photo-upload">
-                    <input type="file" accept="image/*" capture="environment"
-                      onChange={(e) => e.target.files?.[0] && handlePhotoChange(
-                        e.target.files[0], setPhotoBeforeFile, setPhotoBeforePreview
-                      )} className="form-input" />
-                    
-                    {photoBeforePreview && (
-                      <div className="photo-preview-container">
-                        <div className="photo-preview">
-                          <img src={photoBeforePreview} alt="Prévisualisation avant" />
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="form-group">
-                      <label className="form-label">Notes (optionnel)</label>
-                      <textarea value={taskNotes} onChange={(e) => setTaskNotes(e.target.value)}
-                        className="form-textarea" placeholder="Observations..." />
-                    </div>
-                    
-                    <button onClick={handleAction.startTask} className="btn btn-primary"
-                      disabled={!photoBeforeFile || uploadingPhoto}>
-                      {uploadingPhoto ? 'Traitement...' : `Commencer ${labels.tasks[taskType].toLowerCase()}`}
-                    </button>
+                  <div className="form-group">
+                    <label className="form-label">Notes (optionnel)</label>
+                    <textarea value={taskNotes} onChange={(e) => setTaskNotes(e.target.value)}
+                      className="form-textarea" placeholder="Observations..." />
                   </div>
+                  
+                  <button onClick={handleAction.startTask} className="btn btn-primary"
+                    disabled={uploadingPhoto}>
+                    {uploadingPhoto ? 'Traitement...' : `Commencer ${labels.tasks[taskType].toLowerCase()}`}
+                  </button>
                 </div>
               )}
               
-              {/* Terminer une tâche normale */}
+              {/* Terminer une tâche normale - AVEC PHOTO OBLIGATOIRE */}
               {task.status === 'in_progress' && taskType !== 'parking' && (
                 <div className="task-step">
                   <div className="task-step-header">

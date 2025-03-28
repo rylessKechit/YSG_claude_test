@@ -14,7 +14,6 @@ const movementService = {
    */
   uploadAllPhotosDirectS3: async (movementId, photoFiles, isArrival = false) => {
     try {
-      console.log(`Démarrage upload S3 direct pour le mouvement ${movementId}, type: ${isArrival ? 'arrivée' : 'départ'}`);
       
       // 1. Filtrer les fichiers non-null
       const validFiles = [];
@@ -31,8 +30,6 @@ const movementService = {
         console.warn('Aucun fichier à uploader');
         return { success: false, message: 'Aucun fichier à uploader' };
       }
-      
-      console.log(`Upload de ${validFiles.length} fichiers pour types: ${validTypes.join(', ')}`);
       
       // 2. Upload direct à S3
       const uploadResults = await uploadService.uploadMultipleDirect(validFiles);
@@ -56,8 +53,6 @@ const movementService = {
         `${ENDPOINTS.MOVEMENTS.BATCH_S3_PHOTOS(movementId)}`,
         formData
       );
-      
-      console.log(`Photos enregistrées avec succès pour ${movementId}`);
       
       return response.data;
     } catch (error) {

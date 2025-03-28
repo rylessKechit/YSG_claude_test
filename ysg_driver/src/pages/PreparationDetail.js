@@ -44,35 +44,44 @@ const PreparationDetail = () => {
   // Fonctions pour les tâches
   const toggleTaskExpansion = (taskType) => setExpandedTask(expandedTask === taskType ? null : taskType);
 
-  const handleTaskAction = async (action, taskType, photoFile, additionalData = {}) => {
-    if (!photoFile && action !== 'addTaskPhoto') {
-      setError(`Vous devez prendre une photo pour ${action === 'startTask' ? 'commencer' : 'terminer'} la tâche`);
-      return;
-    }
-    
+  const handleTaskAction = async (action, taskType, data1, data2 = {}) => {
     try {
       setTaskLoading(true);
       setError(null);
       
       switch(action) {
         case 'startTask':
-          await preparationService.startTask(id, taskType, photoFile, additionalData);
+          // Démarrage sans photo (data1 est les notes dans ce cas)
+          await preparationService.startTask(id, taskType, data1);
           break;
         case 'completeTask':
-          await preparationService.completeTask(id, taskType, photoFile, additionalData);
-          break;
-        case 'addTaskPhoto':
-          if (!photoFile) {
-            setError('Veuillez sélectionner une photo');
+          // Terminer avec photo obligatoire (data1 est la photo, data2 est additionalData)
+          if (!data1) {
+            setError('Vous devez prendre une photo pour terminer la tâche');
+            setTaskLoading(false);
             return;
           }
-          await preparationService.addTaskPhoto(id, taskType, photoFile, additionalData);
+          await preparationService.completeTask(id, taskType, data1, data2);
+          break;
+        case 'addTaskPhoto':
+          if (!data1) {
+            setError('Veuillez sélectionner une photo');
+            setTaskLoading(false);
+            return;
+          }
+          await preparationService.addTaskPhoto(id, taskType, data1, data2);
           break;
         case 'parkingTask':
-          // Démarrer puis compléter immédiatement
-          await preparationService.startTask(id, 'parking', photoFile, additionalData);
+          // Stationnement en une étape (toujours avec photo obligatoire)
+          if (!data1) {
+            setError('Vous devez prendre une photo pour valider le stationnement');
+            setTaskLoading(false);
+            return;
+          }
+          // Démarrer puis compléter immédiatement pour le stationnement
+          await preparationService.startTask(id, 'parking');
           await new Promise(resolve => setTimeout(resolve, 500));
-          await preparationService.completeTask(id, 'parking', photoFile, { notes: additionalData });
+          await preparationService.completeTask(id, 'parking', data1, { notes: data2 });
           break;
       }
       

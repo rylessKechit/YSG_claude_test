@@ -1,6 +1,11 @@
-// src/services/authService.js (sans système de cache)
+// src/services/authService.js
 import axios from 'axios';
 import { API_URL, ENDPOINTS } from '../config';
+
+// Gestion du cache
+const cache = new Map();
+const pendingRequests = new Map();
+const CACHE_DURATION = 60000; // 1 minute en millisecondes
 
 // Configuration d'Axios avec intercepteurs
 const api = axios.create({
@@ -27,10 +32,54 @@ api.interceptors.response.use(
   }
 );
 
-// Fonction directe sans cache
+// Fonction optimisée pour faire des requêtes GET avec cache
+const fetchWithCache = async (endpoint, options = {}) => {
+  const cacheKey = `${endpoint}${JSON.stringify(options)}`;
+  
+  // Si déjà en cours pour cette clé, attendre la résolution
+  if (pendingRequests.has(cacheKey)) {
+    return pendingRequests.get(cacheKey);
+  }
+  
+  // Vérification du cache
+  const cachedItem = cache.get(cacheKey);
+  if (cachedItem && Date.now() - cachedItem.timestamp < CACHE_DURATION) {
+    return cachedItem.data;
+  }
+  
+  // Créer une promesse pour cette requête
+  const request = api.get(endpoint, options).then(response => {
+    // Stocker dans le cache
+    cache.set(cacheKey, {
+      data: response.data,
+      timestamp: Date.now()
+    });
+    
+    // Supprimer des requêtes en cours
+    pendingRequests.delete(cacheKey);
+    
+    return response.data;
+  }).catch(error => {
+    // Supprimer des requêtes en cours
+    pendingRequests.delete(cacheKey);
+    throw error;
+  });
+  
+  // Enregistrer la requête en cours
+  pendingRequests.set(cacheKey, request);
+  
+  return request;
+};
+
+// Fonction sans cache pour les requêtes qui ne doivent pas être mises en cache
 const fetchWithoutCache = async (endpoint, options = {}) => {
   const response = await api.get(endpoint, options);
   return response.data;
+};
+
+// Vider le cache
+const invalidateCache = () => {
+  cache.clear();
 };
 
 // Service d'authentification
@@ -45,19 +94,20 @@ const authService = {
     return response.data;
   },
   
-  getCurrentUser: async () => fetchWithoutCache(ENDPOINTS.AUTH.ME),
+  getCurrentUser: async () => {
+    // Utiliser fetchWithCache pour la requête getCurrentUser
+    return fetchWithCache(ENDPOINTS.AUTH.ME);
+  },
   
   logout: async () => {
     try {
       await api.post(ENDPOINTS.AUTH.LOGOUT);
     } finally {
       localStorage.removeItem('token');
+      invalidateCache(); // Vider le cache lors de la déconnexion
     }
   }
 };
 
-// Fonction vide pour compatibilité avec le code existant (ne fait rien)
-const invalidateCache = () => {}; 
-
 export default authService;
-export { api, fetchWithoutCache as fetchWithCache, invalidateCache };
+export { api, fetchWithCache, fetchWithoutCache, invalidateCache };

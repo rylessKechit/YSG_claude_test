@@ -13,12 +13,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT;
 
-// Débogage des variables d'environnement AWS
-console.log('AWS S3 Config Check:');
-console.log('AWS_S3_BUCKET:', process.env.AWS_S3_BUCKET);
-console.log('AWS_REGION:', process.env.AWS_REGION);
-console.log('AWS_ACCESS_KEY_ID présent:', process.env.AWS_ACCESS_KEY_ID ? 'Oui' : 'Non');
-console.log('AWS_SECRET_ACCESS_KEY présent:', process.env.AWS_SECRET_ACCESS_KEY ? 'Oui' : 'Non');
 
 // Connexion à la base de données
 connectDB().then(() => {
@@ -32,12 +26,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Répertoire des uploads pour le stockage local de secours
-// S'assurer que le dossier uploads existe
-if (!fs.existsSync('./uploads')) {
-  fs.mkdirSync('./uploads', { recursive: true });
-  console.log('Dossier "uploads" créé avec succès');
-}
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Importer les routes d'upload
@@ -78,5 +66,4 @@ app.use(errorHandler);
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`Serveur démarré sur le port ${PORT}`);
-  console.log(`Configuration d'upload: ${process.env.AWS_S3_BUCKET ? 'AWS S3' : process.env.CLOUDINARY_CLOUD_NAME ? 'Cloudinary' : 'Local'}`);
 });
