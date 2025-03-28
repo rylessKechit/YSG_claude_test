@@ -14,6 +14,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
 import '../styles/MovementDetail.css';
 import trackingService from '../services/trackingService';
+import PhotosDisplaySection from '../components/movement/PhotosDisplaySection';
 
 const MovementDetail = () => {
   const [movement, setMovement] = useState(null);
@@ -175,7 +176,10 @@ const MovementDetail = () => {
       }
       
       // Appel API pour uploader toutes les photos
-      await movementService.uploadAllPhotos(id, formData);
+      // Nouveau code// Vos fichiers sélectionnés
+      const selectedFiles = isArrival ? selectedArrivalPhotoFiles : selectedPhotoFiles;
+      const photoTypes = Object.keys(selectedFiles).filter(key => selectedFiles[key]); // Les types de photos
+      await movementService.uploadPhotosToS3(id, Object.values(selectedFiles).filter(Boolean), photoTypes, isArrival ? 'arrival' : 'departure');
       
       // Mise à jour de l'état pour toutes les photos uploadées
       const updatedPhotoStatus = isArrival ? { ...arrivalPhotosStatus } : { ...photosStatus };
@@ -423,6 +427,24 @@ const MovementDetail = () => {
                 <button className="close-preview" onClick={() => setFullscreenPreview(null)}>×</button>
               </div>
             </div>
+          )}
+
+          {/* Photos de départ (visible après qu'elles aient été téléchargées) */}
+          {movement.status !== 'pending' && movement.status !== 'assigned' && (
+            <PhotosDisplaySection 
+              movement={movement} 
+              title="Photos du véhicule au départ" 
+              photoType="departure" 
+            />
+          )}
+
+          {/* Photos d'arrivée (visible uniquement pour les mouvements terminés) */}
+          {movement.status === 'completed' && (
+            <PhotosDisplaySection 
+              movement={movement} 
+              title="Photos du véhicule à l'arrivée" 
+              photoType="arrival" 
+            />
           )}
           
           <NotesSection

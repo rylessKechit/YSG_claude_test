@@ -65,6 +65,48 @@ const PhotoUploadSection = ({
   // Compter le nombre de photos prises mais pas encore uploadées
   const pendingPhotosCount = Object.values(selectedFiles).filter(file => file !== null).length;
 
+  const preparePhotosForDisplay = (movement) => {
+    if (!movement || !movement.photos || movement.photos.length === 0) {
+      return { departure: {}, arrival: {} };
+    }
+  
+    // Initialiser les objets pour les deux types de photos
+    const departurePhotos = {
+      front: null,
+      passenger: null,
+      driver: null,
+      rear: null,
+      windshield: null,
+      roof: null,
+      meter: null,
+      other: []
+    };
+  
+    const arrivalPhotos = {
+      front: null,
+      passenger: null,
+      driver: null,
+      rear: null,
+      windshield: null,
+      roof: null,
+      meter: null,
+      other: []
+    };
+  
+    // Répartir les photos dans les objets appropriés
+    movement.photos.forEach(photo => {
+      const targetObj = photo.photoType === 'arrival' ? arrivalPhotos : departurePhotos;
+      
+      if (photo.type === 'other' || photo.type === 'damage') {
+        targetObj.other.push(photo);
+      } else if (targetObj[photo.type] === null) {
+        targetObj[photo.type] = photo;
+      }
+    });
+  
+    return { departure: departurePhotos, arrival: arrivalPhotos };
+  };
+
   return (
     <div className="detail-section photo-upload-section">
       <h2 className="section-title">

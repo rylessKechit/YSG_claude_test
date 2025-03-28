@@ -309,18 +309,26 @@ router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
     const photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
     const photoTypes = Array.isArray(req.body.photoTypes) ? req.body.photoTypes : [req.body.photoTypes];
     
-    if (photoUrls.length === 0)
+    if (photoUrls.length === 0) {
       return res.status(400).json({ message: 'Aucune photo n\'a été fournie' });
+    }
     
-    if (photoTypes.length !== photoUrls.length)
+    if (photoTypes.length !== photoUrls.length) {
       return res.status(400).json({ message: 'Le nombre de types ne correspond pas au nombre de photos' });
+    }
     
     // Créer un tableau de photos à ajouter au mouvement
     const photos = photoUrls.map((url, index) => {
       const type = photoTypes[index];
       
-      if (!allowedTypes.includes(type))
+      if (!allowedTypes.includes(type)) {
         return null; // Filtrer les types non valides
+      }
+      
+      // S'assurer que l'URL est définie
+      if (!url) {
+        return null;
+      }
       
       return {
         url,           // URL S3 du fichier
@@ -330,12 +338,17 @@ router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
       };
     }).filter(photo => photo !== null); // Éliminer les entrées nulles
     
+    // Vérifier que toutes les photos ont une URL valide
+    if (photos.some(photo => !photo.url)) {
+      return res.status(400).json({ message: 'Certaines photos ont des URLs invalides' });
+    }
+    
     // Ajouter les photos
     movement.photos.push(...photos);
     await movement.save();
     
     res.json({ 
-      message: `${photos.length} photos ajoutées avec succès`, 
+      message: `${photos.length} photos ajoutées avec succès via S3`, 
       photosUploaded: photos.length,
       photos: movement.photos 
     });
@@ -470,66 +483,6 @@ router.get('/:id',verifyToken,async(req,res)=>{
   }catch(e){
     console.error('Erreur lors de la récupération du mouvement:',e);
     res.status(500).json({message:'Erreur serveur'});
-  }
-});
-
-// Routes S3 pour movement.routes.js (à ajouter)
-
-// Enregistrer des photos S3 uploadées directement
-router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
-  try {
-    const movement = await Movement.findById(req.params.id);
-    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
-    
-    if (req.user.role !== 'admin' && (!movement.userId || movement.userId.toString() !== req.user._id.toString()))
-      return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier ce mouvement' });
-    
-    if (movement.status !== 'preparing' && movement.status !== 'in-progress')
-      return res.status(400).json({ message: 'Vous ne pouvez ajouter des photos qu\'à un mouvement en préparation ou en cours' });
-    
-    const allowedTypes = ['front', 'passenger', 'driver', 'rear', 'windshield', 'roof', 'meter', 'damage', 'other'];
-    const { photoType = 'departure' } = req.body;
-    
-    // Récupérer les URLs et les types
-    const photoUrls = Array.isArray(req.body.photoUrls) ? req.body.photoUrls : [req.body.photoUrls];
-    const photoTypes = Array.isArray(req.body.photoTypes) ? req.body.photoTypes : [req.body.photoTypes];
-    
-    if (photoUrls.length === 0) {
-      return res.status(400).json({ message: 'Aucune photo n\'a été fournie' });
-    }
-    
-    if (photoTypes.length !== photoUrls.length) {
-      return res.status(400).json({ message: 'Le nombre de types ne correspond pas au nombre de photos' });
-    }
-    
-    // Créer un tableau de photos à ajouter au mouvement
-    const photos = photoUrls.map((url, index) => {
-      const type = photoTypes[index];
-      
-      if (!allowedTypes.includes(type)) {
-        return null; // Filtrer les types non valides
-      }
-      
-      return {
-        url,           // URL S3 du fichier
-        type,
-        photoType,
-        timestamp: new Date()
-      };
-    }).filter(photo => photo !== null); // Éliminer les entrées nulles
-    
-    // Ajouter les photos
-    movement.photos.push(...photos);
-    await movement.save();
-    
-    res.json({ 
-      message: `${photos.length} photos ajoutées avec succès via S3`, 
-      photosUploaded: photos.length,
-      photos: movement.photos 
-    });
-  } catch (e) {
-    console.error('Erreur lors de l\'enregistrement des photos S3:', e);
-    res.status(500).json({ message: 'Erreur serveur lors de l\'enregistrement des photos' });
   }
 });
 
