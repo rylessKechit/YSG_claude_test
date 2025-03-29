@@ -32,6 +32,7 @@ const PreparatorPerformance = lazy(() => import('./pages/PreparatorPerformance')
 const DriverPerformance = lazy(() => import('./pages/DriverPerformance'));
 const LocationSettings = lazy(() => import('./pages/LocationSettings'));
 const DriverTrackingMap = lazy(() => import('./pages/DriverTrackingMap'));
+const TrainingPage = lazy(() => import('./pages/TrainingPage'));
 
 // Composant de route protégée
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
@@ -60,6 +61,7 @@ const routes = [
   { path: '/dashboard', element: <Dashboard />, protected: true },
   { path: '/timelog', element: <TimeLog />, protected: true },
   { path: '/profile', element: <Profile />, protected: true },
+  { path: '/training', element: <TrainingPage />, protected: true, roles: [] },
   
   // Routes Chauffeur
   { path: '/movement/history', element: <MovementHistory />, protected: true, roles: ['admin', 'driver', 'team-leader'] },

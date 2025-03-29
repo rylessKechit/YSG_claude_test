@@ -1,0 +1,382 @@
+/* ysg_driver/src/styles/DriverTrackingMap.css - Version améliorée */
+
+/* Conteneur principal */
+.tracking-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* En-tête et titres */
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-title i {
+  color: var(--primary);
+}
+
+/* Contrôles de carte */
+.tracking-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  background-color: var(--white);
+  padding: 1rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.active-movements-selector {
+  flex: 3;
+  min-width: 250px;
+}
+
+.refresh-control {
+  flex: 1;
+  min-width: 150px;
+}
+
+.active-movements-selector label,
+.refresh-control label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.active-movements-selector select,
+.refresh-control select {
+  width: 100%;
+  padding: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--white);
+  font-size: 0.9375rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.active-movements-selector select:focus,
+.refresh-control select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.fit-bounds-btn {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 1rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.fit-bounds-btn:hover {
+  background-color: #2563eb;
+}
+
+.fit-bounds-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Conteneur de carte */
+.map-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  height: 500px;
+  margin-bottom: 1.5rem;
+}
+
+.map-wrapper {
+  background-color: #f3f4f6;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  height: 100%;
+  position: relative;
+  min-height: 400px;
+}
+
+/* Style de l'info-window */
+.info-window {
+  padding: 0.5rem;
+  min-width: 200px;
+}
+
+.info-window h3 {
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.info-window p {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
+/* Informations du véhicule sélectionné */
+.selected-movement-info {
+  background-color: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+  height: 100%;
+}
+
+.selected-movement-info h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--dark);
+  border-bottom: 2px solid var(--primary-light);
+  padding-bottom: 0.5rem;
+}
+
+.info-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-label {
+  font-weight: 500;
+  color: var(--text-light);
+}
+
+.info-value {
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.movement-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.movement-actions button {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 1.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  width: 100%;
+}
+
+.movement-actions button:hover {
+  background-color: #2563eb;
+}
+
+.movement-actions button:active {
+  transform: translateY(1px);
+}
+
+/* Chargement */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  height: 50vh;
+}
+
+.spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 3px solid rgba(59, 130, 246, 0.15);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 1rem;
+}
+
+.loading-container p {
+  color: var(--text-light);
+  font-size: 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Trajet sur la carte */
+.path-marker {
+  background-color: var(--primary);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.path-marker.start {
+  background-color: var(--success);
+  width: 16px;
+  height: 16px;
+}
+
+.path-marker.end {
+  background-color: var(--danger);
+  width: 16px;
+  height: 16px;
+}
+
+/* Animation d'apparition des marqueurs */
+@keyframes fadeInMarker {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.path-marker {
+  animation: fadeInMarker 0.3s ease-in-out;
+}
+
+/* Style pour la section de débogage */
+.debug-section {
+  background-color: var(--light);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border);
+}
+
+.debug-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--dark);
+}
+
+.debug-section p {
+  margin: 0.25rem 0;
+  color: var(--text);
+}
+
+.debug-movements h4 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0.5rem 0;
+  color: var(--dark);
+}
+
+.debug-movements ul {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.debug-movements li {
+  margin-bottom: 0.25rem;
+  font-family: monospace;
+  font-size: 0.8125rem;
+}
+
+/* Responsive */
+@media (min-width: 992px) {
+  .map-container {
+    grid-template-columns: 3fr 1fr;
+    height: 80vh;
+    min-height: 600px;
+  }
+  
+  .tracking-controls {
+    flex-wrap: nowrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .tracking-container {
+    padding: 1rem;
+  }
+  
+  .tracking-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .active-movements-selector,
+  .refresh-control,
+  .fit-bounds-btn {
+    width: 100%;
+  }
+  
+  .map-container {
+    height: 400px;
+  }
+  
+  .selected-movement-info {
+    max-height: none;
+    height: auto;
+  }
+}
+
+/* Ajouts pour le chemin du véhicule */
+.path-points-container {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.path-points-container h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--dark);
+}
+
+.path-points-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: var(--light);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+}
+
+.path-point-item {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+
+.path-point-item:last-child {
+  border-bottom: none;
+}
+
+.path-point-time {
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.path-point-coords {
+  color: var(--text-light);
+  font-family: monospace;
+  font-size: 0.75rem;
+}

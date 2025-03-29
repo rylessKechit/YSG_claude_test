@@ -7,7 +7,8 @@ const roleLinks = {
   common: [
     { name: 'Tableau de bord', path: '/dashboard', visibleFor: ['admin', 'driver', 'preparator', 'team-leader', 'direction'] },
     { name: 'Pointage', path: '/timelog', visibleFor: ['driver', 'preparator', 'team-leader'] },
-    { name: 'Profil', path: '/profile', visibleFor: ['admin', 'driver', 'preparator', 'team-leader', 'direction'] }
+    { name: 'Profil', path: '/profile', visibleFor: ['admin', 'driver', 'preparator', 'team-leader', 'direction'] },
+    { name: 'Formation', path: '/training', visibleFor: ['admin', 'driver', 'preparator', 'team-leader', 'direction'] },
   ],
   admin: [
     { name: 'Nouveau mouvement', path: '/admin/movements/create' },
