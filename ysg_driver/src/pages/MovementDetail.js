@@ -224,6 +224,7 @@ const MovementDetail = () => {
           return;
         case 'prepareMovement':
           await movementService.prepareMovement(id);
+          movement.status = 'preparing';
           setUpdateSuccess('Préparation du mouvement démarrée');
           break;
         case 'startMovement':
@@ -242,6 +243,7 @@ const MovementDetail = () => {
       }
       
       await loadMovement();
+      console.log(movement)
       setTimeout(() => setUpdateSuccess(null), 3000);
     } catch (err) {
       setError(err.response?.data?.message || `Erreur lors de l'action ${actionType}`);
