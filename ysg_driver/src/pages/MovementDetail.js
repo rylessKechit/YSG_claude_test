@@ -76,6 +76,10 @@ const MovementDetail = () => {
     
     setPhotosStatus(updatedPhotoStatus);
     setArrivalPhotosStatus(updatedArrivalPhotoStatus);
+    
+    // Log pour debug
+    console.log("[updatePhotoStatuses] Photos départ:", updatedPhotoStatus);
+    console.log("[updatePhotoStatuses] Photos arrivée:", updatedArrivalPhotoStatus);
   }, []);
 
   // Fonction de chargement du mouvement - optimisée
@@ -184,12 +188,28 @@ const MovementDetail = () => {
   // Fonctions pour vérifier si toutes les photos nécessaires sont prises
   const allRequiredPhotosTaken = useCallback(() => {
     if (!photosStatus) return false;
-    return Object.values(photosStatus).every(status => status === true);
+    
+    // Log pour debug
+    console.log("[allRequiredPhotosTaken] État des photos:", photosStatus);
+    
+    // Vérifier que toutes les valeurs dans l'objet photosStatus sont true
+    const allTaken = Object.values(photosStatus).every(status => status === true);
+    console.log("[allRequiredPhotosTaken] Toutes photos prises?", allTaken);
+    
+    return allTaken;
   }, [photosStatus]);
 
   const allRequiredArrivalPhotosTaken = useCallback(() => {
     if (!arrivalPhotosStatus) return false;
-    return Object.values(arrivalPhotosStatus).every(status => status === true);
+    
+    // Log pour debug
+    console.log("[allRequiredArrivalPhotosTaken] État des photos d'arrivée:", arrivalPhotosStatus);
+    
+    // Vérifier que toutes les valeurs dans l'objet arrivalPhotosStatus sont true
+    const allTaken = Object.values(arrivalPhotosStatus).every(status => status === true);
+    console.log("[allRequiredArrivalPhotosTaken] Toutes photos d'arrivée prises?", allTaken);
+    
+    return allTaken;
   }, [arrivalPhotosStatus]);
 
   // Gestion de l'upload groupé des photos
@@ -214,6 +234,8 @@ const MovementDetail = () => {
         return;
       }
       
+      console.log(`[handleBatchPhotoUpload] Upload de ${validFiles.length} photos ${isArrival ? 'd\'arrivée' : 'de départ'}`);
+      
       // Upload via S3
       const result = await movementService.uploadPhotosToS3(
         id, 
@@ -221,6 +243,8 @@ const MovementDetail = () => {
         photoTypes, 
         isArrival ? 'arrival' : 'departure'
       );
+      
+      console.log(`[handleBatchPhotoUpload] Résultat de l'upload:`, result);
       
       // Mise à jour de l'état du mouvement si la réponse contient le mouvement mis à jour
       if (result.photos && result.movement) {
@@ -235,6 +259,8 @@ const MovementDetail = () => {
           updatedStatus[type] = true;
         });
         setPhotoStatus(updatedStatus);
+        
+        console.log(`[handleBatchPhotoUpload] Mise à jour manuelle des statuts:`, updatedStatus);
       }
       
       // Réinitialisation des fichiers sélectionnés
@@ -286,6 +312,7 @@ const MovementDetail = () => {
           break;
           
         case 'startMovement':
+          console.log('[startMovement] Vérification des photos:', allRequiredPhotosTaken());
           if (!allRequiredPhotosTaken()) {
             setError('Veuillez prendre toutes les photos requises avant de démarrer');
             setUpdateLoading(false);
@@ -298,6 +325,7 @@ const MovementDetail = () => {
           break;
           
         case 'completeMovement':
+          console.log('[completeMovement] Vérification des photos d\'arrivée:', allRequiredArrivalPhotosTaken());
           if (!allRequiredArrivalPhotosTaken()) {
             setError('Veuillez prendre toutes les photos requises à l\'arrivée');
             setUpdateLoading(false);
@@ -387,28 +415,56 @@ const MovementDetail = () => {
 
   // Vérifier si on doit afficher les sections spécifiques du mouvement
   const shouldShowPhotoUploadForPreparation = useCallback(() => {
-    if (!movement || !currentUser) return false;
+    if (!movement || !currentUser) {
+      console.log('Movement ou currentUser manquant');
+      return false;
+    }
     
-    const movementUserId = String(movement.userId || '');
-    const currentUserId = String(currentUser._id || '');
+    console.log('Status actuel:', movement.status);
     
-    const userIdMatches = movementUserId && currentUserId && 
-                          movementUserId === currentUserId;
+    // Extraction plus robuste des IDs
+    let movementUserId;
+    if (typeof movement.userId === 'object' && movement.userId !== null) {
+      // Si userId est un objet, prendre son _id (cas d'un objet popuplated)
+      movementUserId = movement.userId._id;
+    } else {
+      // Sinon, c'est probablement directement l'ID
+      movementUserId = movement.userId;
+    }
     
+    // Conversion explicite en string pour la comparaison
+    const userIdMatches = movementUserId && 
+                          String(movementUserId) === String(currentUser._id);
+    
+    console.log('Movement userID:', movementUserId);
+    console.log('Current userID:', currentUser._id);
+    console.log('IDs correspondent:', userIdMatches);
+    
+    // Debug du statut
+    console.log('Status du mouvement =', movement.status);
+    console.log('Condition statut:', movement.status === 'preparing');
+    
+    // La condition finale
     return movement.status === 'preparing' && 
-           movement.userId && 
            currentUser.role === 'driver' && 
            userIdMatches;
   }, [movement, currentUser]);
 
   const shouldShowPhotoUploadForArrival = useCallback(() => {
     if (!movement || !currentUser) return false;
-
-    const userIdMatches = movement.userId && currentUser._id && 
-                          movement.userId === currentUser._id;
+    
+    // Extraction plus robuste des IDs
+    let movementUserId;
+    if (typeof movement.userId === 'object' && movement.userId !== null) {
+      movementUserId = movement.userId._id;
+    } else {
+      movementUserId = movement.userId;
+    }
+    
+    const userIdMatches = movementUserId && 
+                          String(movementUserId) === String(currentUser._id);
     
     return movement.status === 'in-progress' && 
-           movement.userId && 
            currentUser.role === 'driver' && 
            userIdMatches;
   }, [movement, currentUser]);
@@ -442,6 +498,7 @@ const MovementDetail = () => {
   // Log de rendu pour debug
   console.log(`[Render] État actuel du mouvement: ${movement.status}`);
   console.log(`[Render] Afficher upload préparation: ${shouldShowPhotoUploadForPreparation()}`);
+  console.log(`[Render] Toutes photos prises: ${allRequiredPhotosTaken()}`);
 
   return (
     <div>
@@ -518,7 +575,7 @@ const MovementDetail = () => {
           )}
 
           {/* Photos de départ - visible après qu'elles aient été téléchargées */}
-          {movement.status !== 'pending' && movement.status !== 'assigned' && (
+          {movement.status === 'completed' && (
             <PhotosDisplaySection 
               movement={movement} 
               title="Photos du véhicule au départ" 
