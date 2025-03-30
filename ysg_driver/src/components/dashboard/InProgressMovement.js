@@ -8,7 +8,7 @@ const InProgressMovement = ({ movements }) => {
     <div className="recent-movements">
       <div className="section-header">
         <h2 className="section-title">
-            <i class="fa-solid fa-road"></i> Trajet en cour
+            <i className="fa-solid fa-road"></i> Trajet en cour
         </h2>
       </div>
       
@@ -19,7 +19,7 @@ const InProgressMovement = ({ movements }) => {
             movement={movement}
             actionButton={
               <Link to={`/movement/${movement._id}`} className="btn btn-warning btn-sm">
-                <i class="fa-solid fa-flag-checkered"></i> Terminer
+                <i className="fa-solid fa-flag-checkered"></i> Terminer
               </Link>
             }
           />
