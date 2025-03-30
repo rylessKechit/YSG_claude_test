@@ -751,7 +751,7 @@ router.post('/:id/photos-with-s3', verifyToken, async (req, res) => {
 router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { photoUrls, type = 'other' } = req.body;
+    const { photoUrls, photoPositions, taskType } = req.body;
     
     if (!photoUrls || (Array.isArray(photoUrls) && photoUrls.length === 0)) {
       return res.status(400).json({ message: 'URLs de photos requises' });
@@ -762,37 +762,89 @@ router.post('/:id/photos/batch-s3', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Préparation non trouvée' });
     }
     
-    // Convertir en tableau si ce n'est pas déjà un tableau
+    // CORRECTION: S'assurer que photoUrls est un tableau de chaînes
     const urls = Array.isArray(photoUrls) ? photoUrls : [photoUrls];
+    const positions = Array.isArray(photoPositions) ? photoPositions : [photoPositions];
     
-    // Créer les objets photo - S'assurer que chaque photo a une URL valide
-    const photos = urls.map(url => {
-      if (!url) {
-        return null;
+    // Si un type de tâche est spécifié, ajouter les photos à cette tâche
+    if (taskType) {
+      const validTasks = ['exteriorWashing', 'interiorCleaning', 'refueling', 'parking'];
+      if (!validTasks.includes(taskType)) {
+        return res.status(400).json({ message: 'Type de tâche invalide' });
       }
-      return {
-        url,
-        type,
-        timestamp: new Date()
-      };
-    }).filter(photo => photo !== null);
-    
-    // Vérifier que toutes les photos ont une URL valide
-    if (photos.some(photo => !photo.url)) {
-      return res.status(400).json({ message: 'Certaines photos ont des URLs invalides' });
+      
+      // Vérifier si la tâche existe
+      if (!preparation.tasks[taskType]) {
+        preparation.tasks[taskType] = { 
+          status: 'not_started',
+          photos: { additional: [] }
+        };
+      }
+      
+      // Pour chaque photo...
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        const position = positions[i] || 'additional';
+        
+        // CORRECTION: S'assurer que l'URL est une chaîne de caractères
+        const photoUrl = typeof url === 'string' ? url : String(url);
+        
+        // Selon la position, on ajoute la photo
+        if (position === 'before') {
+          preparation.tasks[taskType].photos.before = {
+            url: photoUrl,
+            timestamp: new Date()
+          };
+          // Si c'est une photo "before", on met à jour le statut
+          if (preparation.tasks[taskType].status === 'not_started') {
+            preparation.tasks[taskType].status = 'in_progress';
+            preparation.tasks[taskType].startedAt = new Date();
+          }
+        } else if (position === 'after') {
+          preparation.tasks[taskType].photos.after = {
+            url: photoUrl,
+            timestamp: new Date()
+          };
+          // Si c'est une photo "after", on met à jour le statut
+          if (preparation.tasks[taskType].status === 'in_progress') {
+            preparation.tasks[taskType].status = 'completed';
+            preparation.tasks[taskType].completedAt = new Date();
+          }
+        } else if (position === 'additional') {
+          if (!preparation.tasks[taskType].photos) {
+            preparation.tasks[taskType].photos = { additional: [] };
+          }
+          if (!preparation.tasks[taskType].photos.additional) {
+            preparation.tasks[taskType].photos.additional = [];
+          }
+          
+          preparation.tasks[taskType].photos.additional.push({
+            url: photoUrl,
+            timestamp: new Date(),
+            description: ''
+          });
+        }
+      }
+      
+      // Mise à jour du statut général de la préparation
+      if (preparation.status === 'pending') {
+        preparation.status = 'in-progress';
+        preparation.startTime = new Date();
+      }
     }
     
-    // Ajouter les photos
-    preparation.photos.push(...photos);
     await preparation.save();
     
-    res.json({
-      message: `${photos.length} photo(s) ajoutée(s) avec succès via S3`,
-      photos: preparation.photos
+    res.json({ 
+      message: `Photos ajoutées avec succès`, 
+      preparation
     });
   } catch (error) {
     console.error('Erreur lors de l\'ajout des photos via S3:', error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ 
+      message: 'Erreur lors de l\'ajout des photos via S3', 
+      error: error.message 
+    });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import preparationService from '../services/preparationService';
@@ -23,76 +23,250 @@ const PreparationDetail = () => {
   const [taskLoading, setTaskLoading] = useState(false);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const initialLoadDone = useRef(false);
+  const isUnmounted = useRef(false);
 
-  // Charger les détails de la préparation
-  useEffect(() => { loadPreparation(); }, [id]);
+  // Liste des types de tâches
+  const taskTypes = ['exteriorWashing', 'interiorCleaning', 'refueling', 'parking'];
 
-  const loadPreparation = async () => {
+  // Chargement initial de la préparation
+  const loadPreparation = useCallback(async () => {
+    if (isUnmounted.current) return;
+    
     try {
       setLoading(true);
       const data = await preparationService.getPreparation(id);
+      
+      if (isUnmounted.current) return;
+      
       setPreparation(data);
-      if (data.notes) setNotes(data.notes);
+      if (data.notes && !notes) setNotes(data.notes);
+      setLoading(false);
+      initialLoadDone.current = true;
     } catch (err) {
       console.error('Erreur:', err);
-      setError('Erreur lors du chargement des détails');
-    } finally {
-      setLoading(false);
+      if (!isUnmounted.current) {
+        setError('Erreur lors du chargement des détails');
+        setLoading(false);
+      }
     }
-  };
+  }, [id, notes]);
+
+  // Chargement initial des données avec cleanup
+  useEffect(() => {
+    isUnmounted.current = false;
+    
+    if (!initialLoadDone.current) {
+      loadPreparation();
+    }
+    
+    return () => {
+      isUnmounted.current = true;
+    };
+  }, [loadPreparation]);
 
   // Fonctions pour les tâches
   const toggleTaskExpansion = (taskType) => setExpandedTask(expandedTask === taskType ? null : taskType);
 
-  const handleTaskAction = async (action, taskType, data1, data2 = {}) => {
+  // Trouve et ouvre la prochaine tâche non complétée
+  const openNextTask = useCallback(() => {
+    if (!preparation) return;
+    
+    // Déterminer l'index de la tâche actuelle
+    const currentIndex = taskTypes.indexOf(expandedTask);
+    
+    // Trouver la prochaine tâche non complétée
+    let nextTask = null;
+    
+    // Commencer par chercher après la tâche actuelle
+    for (let i = currentIndex + 1; i < taskTypes.length; i++) {
+      const taskType = taskTypes[i];
+      const task = preparation.tasks[taskType] || { status: 'not_started' };
+      
+      if (task.status !== 'completed') {
+        nextTask = taskType;
+        break;
+      }
+    }
+    
+    // Si aucune tâche non complétée n'a été trouvée après la tâche actuelle,
+    // chercher depuis le début
+    if (!nextTask && currentIndex > 0) {
+      for (let i = 0; i < currentIndex; i++) {
+        const taskType = taskTypes[i];
+        const task = preparation.tasks[taskType] || { status: 'not_started' };
+        
+        if (task.status !== 'completed') {
+          nextTask = taskType;
+          break;
+        }
+      }
+    }
+    
+    // Ouvrir la prochaine tâche si une a été trouvée
+    if (nextTask) {
+      setExpandedTask(nextTask);
+    } else {
+      // Toutes les tâches sont complétées, fermer l'accordéon
+      setExpandedTask(null);
+    }
+  }, [preparation, expandedTask, taskTypes]);
+
+  // Version optimisée pour traiter les actions de tâche - AVEC MISE À JOUR DIRECTE DEPUIS LA RÉPONSE API
+  const handleTaskAction = async (action, taskType, data, additionalData = {}) => {
+    if (taskLoading) return;
+    
     try {
       setTaskLoading(true);
       setError(null);
       
+      // Validation spécifique pour chaque type de tâche
+      if (action === 'completeTask') {
+        // Vérifier les exigences de photos multiples selon le type de tâche
+        if (taskType === 'exteriorWashing' && (!data || data.length !== 2)) {
+          setError('Pour le lavage extérieur, vous devez fournir exactement 2 photos (3/4 avant et 3/4 arrière)');
+          setTaskLoading(false);
+          return;
+        }
+        
+        if (taskType === 'interiorCleaning' && (!data || data.length !== 3)) {
+          setError('Pour le nettoyage intérieur, vous devez fournir 3 photos (avant, arrière et coffre)');
+          setTaskLoading(false);
+          return;
+        }
+        
+        // Pour les autres types de tâches, vérifier qu'au moins une photo est fournie
+        if ((taskType === 'refueling' || taskType === 'parking') && !data) {
+          setError(`Vous devez prendre une photo pour terminer la tâche ${taskType}`);
+          setTaskLoading(false);
+          return;
+        }
+      }
+      
+      let result;
+      
       switch(action) {
         case 'startTask':
-          // Démarrage sans photo (data1 est les notes dans ce cas)
-          await preparationService.startTask(id, taskType, data1);
-          break;
-        case 'completeTask':
-          // Terminer avec photo obligatoire (data1 est la photo, data2 est additionalData)
-          if (!data1) {
-            setError('Vous devez prendre une photo pour terminer la tâche');
-            setTaskLoading(false);
-            return;
+          // Démarrage sans photo spécifique requise
+          result = await preparationService.startTask(id, taskType, data);
+          // Mettre à jour la préparation avec celle retournée par l'API
+          if (result && result.preparation) {
+            setPreparation(result.preparation);
+            if (result.preparation.notes) setNotes(result.preparation.notes);
           }
-          await preparationService.completeTask(id, taskType, data1, data2);
           break;
+          
+        case 'completeTask':
+          // Traitement optimisé pour photos multiples avec upload parallèle
+          switch(taskType) {
+            case 'exteriorWashing':
+            case 'interiorCleaning':
+              // Upload parallèle des photos avec S3 direct
+              result = await preparationService.uploadBatchTaskPhotosWithDirectS3(
+                id,
+                taskType,
+                data,
+                Array(data.length).fill('after'), // Toutes les photos sont "after"
+                additionalData
+              );
+              // Mettre à jour la préparation avec celle retournée par l'API
+              if (result && result.preparation) {
+                setPreparation(result.preparation);
+                if (result.preparation.notes) setNotes(result.preparation.notes);
+                
+                // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
+                setTimeout(() => {
+                  if (!isUnmounted.current) {
+                    setExpandedTask(null);
+                  }
+                }, 1000);
+              }
+              break;
+              
+            case 'refueling':
+            case 'parking':
+              // Méthode standard pour des tâches avec une seule photo
+              result = await preparationService.completeTaskWithDirectS3(id, taskType, data, additionalData);
+              // Mettre à jour la préparation avec celle retournée par l'API
+              if (result && result.preparation) {
+                setPreparation(result.preparation);
+                if (result.preparation.notes) setNotes(result.preparation.notes);
+                
+                // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
+                setTimeout(() => {
+                  if (!isUnmounted.current) {
+                    setExpandedTask(null);
+                  }
+                }, 1000);
+              }
+              break;
+          }
+          break;
+          
         case 'addTaskPhoto':
-          if (!data1) {
+          if (!data) {
             setError('Veuillez sélectionner une photo');
             setTaskLoading(false);
             return;
           }
-          await preparationService.addTaskPhoto(id, taskType, data1, data2);
+          // Utiliser S3 direct pour de meilleures performances
+          result = await preparationService.addTaskPhotoWithDirectS3(id, taskType, data, additionalData);
+          // Mettre à jour la préparation avec celle retournée par l'API
+          if (result && result.preparation) {
+            setPreparation(result.preparation);
+            if (result.preparation.notes) setNotes(result.preparation.notes);
+          }
           break;
+          
         case 'parkingTask':
-          // Stationnement en une étape (toujours avec photo obligatoire)
-          if (!data1) {
+          // Stationnement en une étape (toujours avec photo)
+          if (!data) {
             setError('Vous devez prendre une photo pour valider le stationnement');
             setTaskLoading(false);
             return;
           }
-          // Démarrer puis compléter immédiatement pour le stationnement
-          await preparationService.startTask(id, 'parking');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          await preparationService.completeTask(id, 'parking', data1, { notes: data2 });
+          
+          // Démarrer la tâche
+          result = await preparationService.startTask(id, 'parking');
+          
+          // Compléter la tâche
+          if (result) {
+            result = await preparationService.completeTaskWithDirectS3(id, 'parking', data, { notes: additionalData });
+            
+            // Mettre à jour la préparation avec celle retournée par l'API
+            if (result && result.preparation) {
+              setPreparation(result.preparation);
+              if (result.preparation.notes) setNotes(result.preparation.notes);
+              
+              // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
+              setTimeout(() => {
+                if (!isUnmounted.current) {
+                  setExpandedTask(null);
+                }
+              }, 1000);
+            }
+          }
           break;
       }
       
+      // Utiliser une notification temporaire
       setSuccess(`Action effectuée avec succès`);
-      await loadPreparation();
-      setTimeout(() => setSuccess(null), 3000);
+      
+      // Effacer le message de succès après un délai
+      const timer = setTimeout(() => {
+        if (!isUnmounted.current) setSuccess(null);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
     } catch (err) {
       console.error('Erreur:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'action');
+      if (!isUnmounted.current) {
+        setError(err.response?.data?.message || 'Erreur lors de l\'action');
+      }
     } finally {
-      setTaskLoading(false);
+      if (!isUnmounted.current) {
+        setTaskLoading(false);
+      }
     }
   };
 
@@ -100,44 +274,61 @@ const PreparationDetail = () => {
   const handleCompletePreparation = async () => {
     try {
       setLoading(true);
-      await preparationService.completePreparation(id, { notes });
-      await loadPreparation();
-      setSuccess('Préparation terminée avec succès');
-      setTimeout(() => {
-        setSuccess(null);
-        navigate('/preparations');
-      }, 2000);
+      const result = await preparationService.completePreparation(id, { notes });
+      
+      if (!isUnmounted.current) {
+        // Utiliser directement la préparation retournée par l'API
+        if (result && result.preparation) {
+          setPreparation(result.preparation);
+        }
+        
+        setSuccess('Préparation terminée avec succès');
+        
+        // Navigation après un délai
+        setTimeout(() => {
+          if (!isUnmounted.current) {
+            setSuccess(null);
+            navigate('/preparations');
+          }
+        }, 2000);
+      }
     } catch (err) {
       console.error('Erreur:', err);
-      setError('Erreur lors de la finalisation');
-      setLoading(false);
+      if (!isUnmounted.current) {
+        setError('Erreur lors de la finalisation');
+        setLoading(false);
+      }
     }
   };
 
-  // Permissions
-  const canEdit = () => {
+  // Permissions - Optimisé avec mémoisation
+  const canEdit = useCallback(() => {
     if (!preparation || !currentUser) return false;
     return (preparation.userId && preparation.userId._id === currentUser._id) || currentUser.role === 'admin';
-  };
+  }, [preparation, currentUser]);
+
+  // Vérifier si au moins une tâche est complétée
+  const hasCompletedTasks = useCallback(() => {
+    if (!preparation) return false;
+    return Object.values(preparation.tasks).some(task => task.status === 'completed');
+  }, [preparation]);
 
   // Obtenir l'URL d'une photo
-  const getPhotoUrlByType = (taskType, photoType) => {
+  const getPhotoUrlByType = useCallback((taskType, photoType) => {
     if (!preparation?.tasks[taskType]?.photos) return '';
     const photo = preparation.tasks[taskType].photos[photoType];
     return photo?.url || '';
-  };
-
-  // Vérifier si au moins une tâche est complétée
-  const hasCompletedTasks = () => {
-    if (!preparation) return false;
-    return Object.values(preparation.tasks).some(task => task.status === 'completed');
-  };
-
-  // Liste des types de tâches
-  const taskTypes = ['exteriorWashing', 'interiorCleaning', 'refueling', 'parking'];
+  }, [preparation]);
 
   // Affichages conditionnels
-  if (loading && !preparation) return <div><Navigation /><div className="loading-container"><LoadingSpinner /></div></div>;
+  if (loading && !preparation) return (
+    <div>
+      <Navigation />
+      <div className="loading-container">
+        <LoadingSpinner />
+      </div>
+    </div>
+  );
   
   if (error && !preparation) {
     return (
@@ -146,7 +337,9 @@ const PreparationDetail = () => {
         <div className="preparation-detail-container">
           <AlertMessage type="error" message={error || 'Préparation non trouvée'} />
           <div className="back-button-container">
-            <button onClick={() => navigate('/preparations')} className="btn btn-primary">Retour à la liste</button>
+            <button onClick={() => navigate('/preparations')} className="btn btn-primary">
+              Retour à la liste
+            </button>
           </div>
         </div>
       </div>
@@ -159,17 +352,34 @@ const PreparationDetail = () => {
       <div className="preparation-detail-container">
         <div className="detail-header">
           <h1 className="detail-title">Détails de la préparation</h1>
-          <Link to="/preparations" className="back-link"><i className="fas fa-arrow-left"></i> Retour à la liste</Link>
+          <Link to="/preparations" className="back-link">
+            <i className="fas fa-arrow-left"></i> Retour à la liste
+          </Link>
         </div>
         
-        {error && <AlertMessage type="error" message={error} />}
-        {success && <AlertMessage type="success" message={success} />}
+        {error && (
+          <AlertMessage 
+            type="error" 
+            message={error} 
+            onDismiss={() => setError(null)}
+          />
+        )}
+        
+        {success && (
+          <AlertMessage 
+            type="success" 
+            message={success} 
+            onDismiss={() => setSuccess(null)}
+          />
+        )}
         
         <div className="detail-card">
           <PreparationInfoSection preparation={preparation} />
           
           <div className="detail-section tasks-section">
-            <h2 className="section-title"><i className="fas fa-tasks"></i> Tâches de préparation</h2>
+            <h2 className="section-title">
+              <i className="fas fa-tasks"></i> Tâches de préparation
+            </h2>
             <div className="task-grid">
               {taskTypes.map(taskType => (
                 <PreparationTaskSection
@@ -180,7 +390,7 @@ const PreparationDetail = () => {
                   onToggleTask={toggleTaskExpansion}
                   canEdit={canEdit()}
                   onStartTask={(type, photo, notes) => handleTaskAction('startTask', type, photo, notes)}
-                  onCompleteTask={(type, photo, data) => handleTaskAction('completeTask', type, photo, data)}
+                  onCompleteTask={(type, photos, data) => handleTaskAction('completeTask', type, photos, data)}
                   onAddTaskPhoto={(type, photo, desc) => handleTaskAction('addTaskPhoto', type, photo, desc)}
                   onParkingTask={(type, photo, notes) => handleTaskAction('parkingTask', type, photo, notes)}
                   uploadingPhoto={taskLoading}
