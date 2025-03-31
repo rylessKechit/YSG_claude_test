@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 
-const PreparationTaskSection = ({ 
+// Composant optimisé avec React.memo pour éviter les rendus inutiles
+const PreparationTaskSection = memo(({ 
   preparation, taskType, expandedTask, onToggleTask, canEdit, 
   onStartTask, onCompleteTask, onAddTaskPhoto, onParkingTask,
-  uploadingPhoto, getPhotoUrlByType
+  uploadingPhoto
 }) => {
-  // États pour les photos - modifiés pour prendre en charge plusieurs photos
+  // États pour les photos
   const [photoAfterFiles, setPhotoAfterFiles] = useState([]);
   const [photoAfterPreviews, setPhotoAfterPreviews] = useState([]);
   const [additionalPhotoFile, setAdditionalPhotoFile] = useState(null);
@@ -14,7 +15,7 @@ const PreparationTaskSection = ({
   const [taskNotes, setTaskNotes] = useState('');
   const [refuelingAmount, setRefuelingAmount] = useState('');
   
-  // Référence aux fichiers input pour déclencher les sélecteurs de fichiers
+  // Référence aux fichiers input
   const fileInputRefs = useRef({
     after1: null,
     after2: null,
@@ -22,46 +23,9 @@ const PreparationTaskSection = ({
     additional: null
   });
 
-  // Gestion des photos multiples
-  const handlePhotoChange = useCallback((files, index = null) => {
-    if (!files || files.length === 0) return;
-    
-    const file = files[0]; // Prendre le premier fichier de la liste
-    
-    if (!file) return;
-    
-    // Si c'est une photo "after" avec un index spécifique
-    if (index !== null) {
-      // Créer des copies des tableaux existants
-      const newFiles = [...photoAfterFiles];
-      const newPreviews = [...photoAfterPreviews];
-      
-      // Mettre à jour le fichier et l'aperçu à l'index spécifié
-      newFiles[index] = file;
-      newPreviews[index] = URL.createObjectURL(file);
-      
-      setPhotoAfterFiles(newFiles);
-      setPhotoAfterPreviews(newPreviews);
-    } 
-    // Si c'est une photo additionnelle
-    else {
-      setAdditionalPhotoFile(file);
-      setAdditionalPhotoPreview(URL.createObjectURL(file));
-    }
-  }, [photoAfterFiles, photoAfterPreviews]);
-  
-  // Nettoyer les URLs des aperçus quand le composant est démonté
-  useEffect(() => {
-    return () => {
-      photoAfterPreviews.forEach(preview => {
-        if (preview) URL.revokeObjectURL(preview);
-      });
-      
-      if (additionalPhotoPreview) {
-        URL.revokeObjectURL(additionalPhotoPreview);
-      }
-    };
-  }, [photoAfterPreviews, additionalPhotoPreview]);
+  // Obtenir la tâche actuelle - c'est cette référence qui est utilisée partout
+  const task = preparation.tasks[taskType] || { status: 'not_started', photos: { additional: [] } };
+  const isExpanded = expandedTask === taskType;
   
   // Initialiser les tableaux de photos en fonction du type de tâche
   useEffect(() => {
@@ -76,9 +40,50 @@ const PreparationTaskSection = ({
       setPhotoAfterPreviews([null]);
     }
   }, [taskType]);
-
+  
+  // Nettoyer les URLs des aperçus quand le composant est démonté
+  useEffect(() => {
+    return () => {
+      photoAfterPreviews.forEach(preview => {
+        if (preview) URL.revokeObjectURL(preview);
+      });
+      
+      if (additionalPhotoPreview) {
+        URL.revokeObjectURL(additionalPhotoPreview);
+      }
+    };
+  }, [photoAfterPreviews, additionalPhotoPreview]);
+  
+  // Gestion des photos optimisée avec useCallback
+  const handlePhotoChange = useCallback((files, index = null) => {
+    if (!files || files.length === 0) return;
+    
+    const file = files[0]; // Prendre le premier fichier de la liste
+    if (!file) return;
+    
+    // Si c'est une photo "after" avec un index spécifique
+    if (index !== null) {
+      setPhotoAfterFiles(prev => {
+        const newFiles = [...prev];
+        newFiles[index] = file;
+        return newFiles;
+      });
+      
+      setPhotoAfterPreviews(prev => {
+        const newPreviews = [...prev];
+        newPreviews[index] = URL.createObjectURL(file);
+        return newPreviews;
+      });
+    } 
+    // Si c'est une photo additionnelle
+    else {
+      setAdditionalPhotoFile(file);
+      setAdditionalPhotoPreview(URL.createObjectURL(file));
+    }
+  }, []);
+  
   // Actions par type de tâche
-  const handleAction = {
+  const handleAction = useCallback({
     startTask: () => {
       onStartTask(taskType, taskNotes);
       setTaskNotes('');
@@ -91,9 +96,8 @@ const PreparationTaskSection = ({
         additionalData.amount = refuelingAmount;
       }
       
-      // Selon le type de tâche, envoyer le bon nombre de photos
+      // Validations selon le type de tâche
       if (taskType === 'exteriorWashing') {
-        // Vérifier que les deux photos sont présentes
         if (!photoAfterFiles[0] || !photoAfterFiles[1]) {
           alert('Vous devez fournir les deux photos requises pour le lavage extérieur');
           return;
@@ -101,7 +105,6 @@ const PreparationTaskSection = ({
         onCompleteTask(taskType, photoAfterFiles, additionalData);
       } 
       else if (taskType === 'interiorCleaning') {
-        // Vérifier que les trois photos sont présentes
         if (!photoAfterFiles[0] || !photoAfterFiles[1] || !photoAfterFiles[2]) {
           alert('Vous devez fournir les trois photos requises pour le nettoyage intérieur');
           return;
@@ -109,15 +112,14 @@ const PreparationTaskSection = ({
         onCompleteTask(taskType, photoAfterFiles, additionalData);
       } 
       else {
-        // Pour les autres tâches, une seule photo suffit
         onCompleteTask(taskType, photoAfterFiles[0], additionalData);
       }
       
-      // Réinitialiser tous les états
+      // Réinitialiser les états
       setPhotoAfterFiles(taskType === 'exteriorWashing' ? Array(2).fill(null) : 
-                        taskType === 'interiorCleaning' ? Array(3).fill(null) : [null]);
+                         taskType === 'interiorCleaning' ? Array(3).fill(null) : [null]);
       setPhotoAfterPreviews(taskType === 'exteriorWashing' ? Array(2).fill(null) : 
-                           taskType === 'interiorCleaning' ? Array(3).fill(null) : [null]);
+                            taskType === 'interiorCleaning' ? Array(3).fill(null) : [null]);
       setTaskNotes('');
       setRefuelingAmount('');
     },
@@ -135,9 +137,9 @@ const PreparationTaskSection = ({
       setPhotoAfterPreviews([null]);
       setTaskNotes('');
     }
-  };
+  }, [taskType, taskNotes, photoAfterFiles, refuelingAmount, additionalPhotoFile, additionalPhotoDescription, onStartTask, onCompleteTask, onAddTaskPhoto, onParkingTask]);
 
-  // Labels des tâches et statuts
+  // Labels des tâches et statuts (définis en dehors du rendu pour éviter les recréations)
   const labels = {
     tasks: {
       exteriorWashing: 'Lavage extérieur',
@@ -163,26 +165,24 @@ const PreparationTaskSection = ({
     }
   };
 
-  const task = preparation.tasks[taskType] || { status: 'not_started' };
-  const isExpanded = expandedTask === taskType;
-  
   // Helper pour obtenir le nombre de photos requises selon le type de tâche
-  const getRequiredPhotosCount = (type) => {
+  const getRequiredPhotosCount = useCallback((type) => {
     switch(type) {
       case 'exteriorWashing': return 2;
       case 'interiorCleaning': return 3;
       default: return 1;
     }
-  };
+  }, []);
   
   // Trigger pour ouvrir le sélecteur de fichier
-  const triggerFileInput = (refName) => {
+  const triggerFileInput = useCallback((refName) => {
     if (fileInputRefs.current[refName]) {
       fileInputRefs.current[refName].click();
     }
-  };
+  }, []);
 
-  const renderPhotoInputs = () => {
+  // Fonction pour le rendu des inputs de photos optimisée avec useCallback
+  const renderPhotoInputs = useCallback(() => {
     const requiredPhotos = getRequiredPhotosCount(taskType);
     
     if (taskType === 'exteriorWashing' || taskType === 'interiorCleaning') {
@@ -267,7 +267,9 @@ const PreparationTaskSection = ({
         </div>
       );
     }
-  };
+  }, [taskType, photoAfterPreviews, handlePhotoChange, triggerFileInput, getRequiredPhotosCount]);
+
+  console.log(`RENDER ${taskType}: status=${task.status}, expanded=${isExpanded}, startedAt=${!!task.startedAt}`);
 
   return (
     <div className="task-card">
@@ -282,7 +284,6 @@ const PreparationTaskSection = ({
         </div>
       </div>
       
-      {/* Ajout de la classe 'show-task-content' pour forcer l'affichage du contenu */}
       {isExpanded && (
         <div className="task-content show-task-content">
           {/* Métadonnées de la tâche si disponibles */}
@@ -314,7 +315,7 @@ const PreparationTaskSection = ({
               <h4 className="photos-section-title">Photos de la tâche</h4>
               
               <div className="task-photos">
-                {task.photos.before && (
+                {task.photos?.before && (
                   <div className="photo-container">
                     <div className="photo-header">Photo avant</div>
                     <img src={task.photos.before.url} alt="Avant" className="photo-image" 
@@ -327,8 +328,7 @@ const PreparationTaskSection = ({
                   </div>
                 )}
                 
-                {/* Afficher après les photos "after" (peut être multiple) */}
-                {task.photos.after && (
+                {task.photos?.after && (
                   <div className="photo-container">
                     <div className="photo-header">Photo après</div>
                     <img src={task.photos.after.url} alt="Après" className="photo-image" 
@@ -364,10 +364,10 @@ const PreparationTaskSection = ({
             </div>
           )}
           
-          {/* CORRECTION: Ajouté une vérification explicite pour montrer les actions uniquement si elles sont permises */}
+          {/* Actions conditionnelles - Utiliser directement task.status pour les conditions */}
           {canEdit && preparation.status !== 'completed' && (
             <div className="task-actions">
-              {/* Démarrer une tâche */}
+              {/* Démarrer une tâche - Uniquement si non commencée */}
               {task.status === 'not_started' && taskType !== 'parking' && (
                 <div className="task-step">
                   <div className="task-step-header">
@@ -395,32 +395,20 @@ const PreparationTaskSection = ({
                 </div>
               )}
               
-              {/* CORRECTION: Forcé l'affichage du formulaire pour les tâches en cours */}
-              {/* Terminer une tâche en cours */}
-              {task.status === 'in_progress' && taskType !== 'parking' && (
+              {/* Section pour terminer une tâche - SIMPLIFIÉE ET FORCÉE */}
+              {isExpanded && task.status === 'in_progress' && (
                 <div className="task-step">
                   <div className="task-step-header">
                     <span className="step-number">2</span>
                     <span>Terminer {labels.tasks[taskType].toLowerCase()}</span>
                   </div>
                   
-                  {taskType === 'exteriorWashing' && (
-                    <p className="task-requirements">
-                      Prenez 2 photos du véhicule (3/4 avant et 3/4 arrière en diagonale) pour documenter le travail effectué.
-                    </p>
-                  )}
-                  
-                  {taskType === 'interiorCleaning' && (
-                    <p className="task-requirements">
-                      Prenez 3 photos (intérieur avant, intérieur arrière et coffre) pour documenter le travail effectué.
-                    </p>
-                  )}
-                  
-                  {taskType !== 'exteriorWashing' && taskType !== 'interiorCleaning' && (
-                    <p className="task-requirements">
-                      Prenez une photo pour documenter le travail effectué.
-                    </p>
-                  )}
+                  {/* Contenu du formulaire d'upload... */}
+                  <p className="task-requirements">
+                    Prenez {taskType === 'exteriorWashing' ? '2 photos' : 
+                          taskType === 'interiorCleaning' ? '3 photos' : 
+                          'une photo'} pour documenter le travail effectué.
+                  </p>
                   
                   {renderPhotoInputs()}
                   
@@ -454,13 +442,7 @@ const PreparationTaskSection = ({
                   <button 
                     onClick={handleAction.completeTask} 
                     className="btn btn-success"
-                    disabled={
-                      (taskType === 'exteriorWashing' && (!photoAfterFiles[0] || !photoAfterFiles[1])) ||
-                      (taskType === 'interiorCleaning' && (!photoAfterFiles[0] || !photoAfterFiles[1] || !photoAfterFiles[2])) ||
-                      (taskType === 'refueling' && (!photoAfterFiles[0] || !refuelingAmount)) ||
-                      (taskType !== 'exteriorWashing' && taskType !== 'interiorCleaning' && taskType !== 'refueling' && !photoAfterFiles[0]) ||
-                      uploadingPhoto
-                    }
+                    disabled={uploadingPhoto}
                   >
                     {uploadingPhoto ? 'Traitement...' : `Terminer ${labels.tasks[taskType].toLowerCase()}`}
                   </button>
@@ -468,7 +450,7 @@ const PreparationTaskSection = ({
               )}
               
               {/* Cas spécial: Stationnement */}
-              {(!task || task.status === 'not_started') && taskType === 'parking' && (
+              {taskType === 'parking' && task.status === 'not_started' && (
                 <div className="task-step">
                   <div className="task-step-header">
                     <span className="step-number">1</span>
@@ -517,7 +499,7 @@ const PreparationTaskSection = ({
                 </div>
               )}
               
-              {/* Ajout de photos additionnelles */}
+              {/* Ajout de photos additionnelles - Disponible pour les tâches en cours ou terminées */}
               {(task.status === 'in_progress' || task.status === 'completed') && (
                 <div className="task-step">
                   <div className="task-step-header">
@@ -592,6 +574,9 @@ const PreparationTaskSection = ({
       )}
     </div>
   );
-};
+});
+
+// Définir un nom pour le composant (utile pour les outils de développement)
+PreparationTaskSection.displayName = 'PreparationTaskSection';
 
 export default PreparationTaskSection;

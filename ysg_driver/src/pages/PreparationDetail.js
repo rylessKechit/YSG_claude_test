@@ -21,6 +21,7 @@ const PreparationDetail = () => {
   const [notes, setNotes] = useState('');
   const [expandedTask, setExpandedTask] = useState(null);
   const [taskLoading, setTaskLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Pour forcer le re-rendu des composants enfants
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const initialLoadDone = useRef(false);
@@ -44,7 +45,7 @@ const PreparationDetail = () => {
       setLoading(false);
       initialLoadDone.current = true;
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error('Erreur lors du chargement des détails:', err);
       if (!isUnmounted.current) {
         setError('Erreur lors du chargement des détails');
         setLoading(false);
@@ -65,55 +66,14 @@ const PreparationDetail = () => {
     };
   }, [loadPreparation]);
 
-  // Fonctions pour les tâches
-  const toggleTaskExpansion = (taskType) => setExpandedTask(expandedTask === taskType ? null : taskType);
+  // Fonction pour basculer l'expansion des tâches
+  const toggleTaskExpansion = useCallback((taskType) => {
+    console.log(`Toggle task expansion: ${taskType}, current: ${expandedTask}`);
+    setExpandedTask(prevTask => prevTask === taskType ? null : taskType);
+  }, [expandedTask]);
 
-  // Trouve et ouvre la prochaine tâche non complétée
-  const openNextTask = useCallback(() => {
-    if (!preparation) return;
-    
-    // Déterminer l'index de la tâche actuelle
-    const currentIndex = taskTypes.indexOf(expandedTask);
-    
-    // Trouver la prochaine tâche non complétée
-    let nextTask = null;
-    
-    // Commencer par chercher après la tâche actuelle
-    for (let i = currentIndex + 1; i < taskTypes.length; i++) {
-      const taskType = taskTypes[i];
-      const task = preparation.tasks[taskType] || { status: 'not_started' };
-      
-      if (task.status !== 'completed') {
-        nextTask = taskType;
-        break;
-      }
-    }
-    
-    // Si aucune tâche non complétée n'a été trouvée après la tâche actuelle,
-    // chercher depuis le début
-    if (!nextTask && currentIndex > 0) {
-      for (let i = 0; i < currentIndex; i++) {
-        const taskType = taskTypes[i];
-        const task = preparation.tasks[taskType] || { status: 'not_started' };
-        
-        if (task.status !== 'completed') {
-          nextTask = taskType;
-          break;
-        }
-      }
-    }
-    
-    // Ouvrir la prochaine tâche si une a été trouvée
-    if (nextTask) {
-      setExpandedTask(nextTask);
-    } else {
-      // Toutes les tâches sont complétées, fermer l'accordéon
-      setExpandedTask(null);
-    }
-  }, [preparation, expandedTask, taskTypes]);
-
-  // Version optimisée pour traiter les actions de tâche - AVEC MISE À JOUR DIRECTE DEPUIS LA RÉPONSE API
-  const handleTaskAction = async (action, taskType, data, additionalData = {}) => {
+  // Fonction optimisée pour traiter les actions de tâche
+  const handleTaskAction = useCallback(async (action, taskType, data, additionalData = {}) => {
     if (taskLoading) return;
     
     try {
@@ -122,7 +82,7 @@ const PreparationDetail = () => {
       
       // Validation spécifique pour chaque type de tâche
       if (action === 'completeTask') {
-        // Vérifier les exigences de photos multiples selon le type de tâche
+        // Vérifier les exigences de photos multiples
         if (taskType === 'exteriorWashing' && (!data || data.length !== 2)) {
           setError('Pour le lavage extérieur, vous devez fournir exactement 2 photos (3/4 avant et 3/4 arrière)');
           setTaskLoading(false);
@@ -147,119 +107,130 @@ const PreparationDetail = () => {
       
       switch(action) {
         case 'startTask':
-          // Démarrage sans photo spécifique requise
+          console.log(`Démarrage de la tâche ${taskType}`);
           result = await preparationService.startTask(id, taskType, data);
-          // Mettre à jour la préparation avec celle retournée par l'API
+          
           if (result && result.preparation) {
-            setPreparation(result.preparation);
+            // Créer une copie profonde
+            const updatedPreparation = JSON.parse(JSON.stringify(result.preparation));
+            
+            // Forcer un changement d'état immédiat et VISIBLE
+            setPreparation(null); // Forcer un reset
+            setTimeout(() => {
+              setPreparation(updatedPreparation); // Rétablir avec les nouvelles données
+              setRefreshKey(prev => prev + 1); // Forcer un remontage
+              setExpandedTask(taskType); // Réouvrir immédiatement
+            }, 10);
+            
             if (result.preparation.notes) setNotes(result.preparation.notes);
+          } else {
+            console.log("Rechargement complet des données");
+            await loadPreparation();
+            
+            // Forcer un rafraîchissement et garder l'accordion ouvert
+            setRefreshKey(prev => prev + 1);
+            setExpandedTask(taskType);
           }
           break;
           
         case 'completeTask':
-          // Traitement optimisé pour photos multiples avec upload parallèle
-          switch(taskType) {
-            case 'exteriorWashing':
-            case 'interiorCleaning':
-              // Upload parallèle des photos avec S3 direct
-              result = await preparationService.uploadBatchTaskPhotosWithDirectS3(
-                id,
-                taskType,
-                data,
-                Array(data.length).fill('after'), // Toutes les photos sont "after"
-                additionalData
-              );
-              // Mettre à jour la préparation avec celle retournée par l'API
-              if (result && result.preparation) {
-                setPreparation(result.preparation);
-                if (result.preparation.notes) setNotes(result.preparation.notes);
-                
-                // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
-                setTimeout(() => {
-                  if (!isUnmounted.current) {
-                    setExpandedTask(null);
-                  }
-                }, 1000);
-              }
-              break;
-              
-            case 'refueling':
-            case 'parking':
-              // Méthode standard pour des tâches avec une seule photo
-              result = await preparationService.completeTaskWithDirectS3(id, taskType, data, additionalData);
-              // Mettre à jour la préparation avec celle retournée par l'API
-              if (result && result.preparation) {
-                setPreparation(result.preparation);
-                if (result.preparation.notes) setNotes(result.preparation.notes);
-                
-                // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
-                setTimeout(() => {
-                  if (!isUnmounted.current) {
-                    setExpandedTask(null);
-                  }
-                }, 1000);
-              }
-              break;
+          console.log(`Complétion de la tâche ${taskType}`);
+          
+          if (taskType === 'exteriorWashing' || taskType === 'interiorCleaning') {
+            result = await preparationService.uploadBatchTaskPhotosWithDirectS3(
+              id, taskType, data, Array(data.length).fill('after'), additionalData
+            );
+          } else {
+            result = await preparationService.completeTaskWithDirectS3(id, taskType, data, additionalData);
+          }
+          
+          if (result && result.preparation) {
+            console.log(`Tâche ${taskType} complétée avec succès`);
+            
+            // Créer une copie profonde avec une nouvelle référence
+            const updatedPreparation = JSON.parse(JSON.stringify(result.preparation));
+            
+            setPreparation(updatedPreparation);
+            if (result.preparation.notes) setNotes(result.preparation.notes);
+            
+            // Forcer un rafraîchissement du composant
+            setRefreshKey(prev => prev + 1);
+          } else {
+            console.log("Rechargement complet des données");
+            await loadPreparation();
+            setRefreshKey(prev => prev + 1);
           }
           break;
           
         case 'addTaskPhoto':
-          if (!data) {
-            setError('Veuillez sélectionner une photo');
-            setTaskLoading(false);
-            return;
-          }
-          // Utiliser S3 direct pour de meilleures performances
+          console.log(`Ajout d'une photo additionnelle à la tâche ${taskType}`);
+          
           result = await preparationService.addTaskPhotoWithDirectS3(id, taskType, data, additionalData);
-          // Mettre à jour la préparation avec celle retournée par l'API
+          
           if (result && result.preparation) {
-            setPreparation(result.preparation);
-            if (result.preparation.notes) setNotes(result.preparation.notes);
+            console.log(`Photo ajoutée à la tâche ${taskType}`);
+            
+            // Créer une copie profonde avec une nouvelle référence
+            const updatedPreparation = JSON.parse(JSON.stringify(result.preparation));
+            
+            setPreparation(updatedPreparation);
+            
+            // Forcer un rafraîchissement du composant
+            setRefreshKey(prev => prev + 1);
+          } else {
+            console.log("Rechargement complet des données");
+            await loadPreparation();
+            setRefreshKey(prev => prev + 1);
           }
           break;
           
         case 'parkingTask':
-          // Stationnement en une étape (toujours avec photo)
-          if (!data) {
-            setError('Vous devez prendre une photo pour valider le stationnement');
-            setTaskLoading(false);
-            return;
-          }
+          console.log("Traitement du stationnement");
           
-          // Démarrer la tâche
+          // 1. Démarrer la tâche
           result = await preparationService.startTask(id, 'parking');
           
-          // Compléter la tâche
+          // 2. Compléter la tâche immédiatement
           if (result) {
-            result = await preparationService.completeTaskWithDirectS3(id, 'parking', data, { notes: additionalData });
+            console.log("Stationnement démarré, complétion immédiate");
             
-            // Mettre à jour la préparation avec celle retournée par l'API
+            result = await preparationService.completeTaskWithDirectS3(
+              id, 'parking', data, { notes: additionalData }
+            );
+            
             if (result && result.preparation) {
-              setPreparation(result.preparation);
+              console.log("Stationnement complété avec succès");
+              
+              // Créer une copie profonde avec une nouvelle référence
+              const updatedPreparation = JSON.parse(JSON.stringify(result.preparation));
+              
+              setPreparation(updatedPreparation);
               if (result.preparation.notes) setNotes(result.preparation.notes);
               
-              // Après avoir terminé la tâche, fermer l'accordéon et ouvrir le suivant
-              setTimeout(() => {
-                if (!isUnmounted.current) {
-                  setExpandedTask(null);
-                }
-              }, 1000);
+              // Forcer un rafraîchissement du composant
+              setRefreshKey(prev => prev + 1);
+            } else {
+              console.log("Rechargement complet des données");
+              await loadPreparation();
+              setRefreshKey(prev => prev + 1);
             }
           }
           break;
       }
       
-      // Utiliser une notification temporaire
-      setSuccess(`Action effectuée avec succès`);
+      // Notification de succès
+      setSuccess(`Opération effectuée avec succès`);
       
-      // Effacer le message de succès après un délai
+      // Effacer le message de succès après 3 secondes
       const timer = setTimeout(() => {
-        if (!isUnmounted.current) setSuccess(null);
+        if (!isUnmounted.current) {
+          setSuccess(null);
+        }
       }, 3000);
       
       return () => clearTimeout(timer);
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error('Erreur lors de l\'action sur la tâche:', err);
       if (!isUnmounted.current) {
         setError(err.response?.data?.message || 'Erreur lors de l\'action');
       }
@@ -268,10 +239,10 @@ const PreparationDetail = () => {
         setTaskLoading(false);
       }
     }
-  };
+  }, [id, taskLoading, loadPreparation]);
 
   // Terminer la préparation
-  const handleCompletePreparation = async () => {
+  const handleCompletePreparation = useCallback(async () => {
     try {
       setLoading(true);
       const result = await preparationService.completePreparation(id, { notes });
@@ -279,7 +250,9 @@ const PreparationDetail = () => {
       if (!isUnmounted.current) {
         // Utiliser directement la préparation retournée par l'API
         if (result && result.preparation) {
-          setPreparation(result.preparation);
+          // Créer une copie profonde avec une nouvelle référence
+          const updatedPreparation = JSON.parse(JSON.stringify(result.preparation));
+          setPreparation(updatedPreparation);
         }
         
         setSuccess('Préparation terminée avec succès');
@@ -293,43 +266,60 @@ const PreparationDetail = () => {
         }, 2000);
       }
     } catch (err) {
-      console.error('Erreur:', err);
+      console.error('Erreur lors de la finalisation:', err);
       if (!isUnmounted.current) {
-        setError('Erreur lors de la finalisation');
+        setError(err.response?.data?.message || 'Erreur lors de la finalisation');
         setLoading(false);
       }
     }
-  };
+  }, [id, notes, navigate]);
 
-  // Permissions - Optimisé avec mémoisation
+  // Vérifier les permissions d'édition
   const canEdit = useCallback(() => {
     if (!preparation || !currentUser) return false;
-    return (preparation.userId && preparation.userId._id === currentUser._id) || currentUser.role === 'admin';
+    
+    // Les admins peuvent toujours éditer
+    if (currentUser.role === 'admin') return true;
+    
+    // L'utilisateur qui a créé la préparation peut l'éditer
+    if (preparation.userId && preparation.userId._id === currentUser._id) return true;
+    
+    return false;
   }, [preparation, currentUser]);
 
   // Vérifier si au moins une tâche est complétée
   const hasCompletedTasks = useCallback(() => {
     if (!preparation) return false;
-    return Object.values(preparation.tasks).some(task => task.status === 'completed');
+    
+    return Object.values(preparation.tasks).some(task => task && task.status === 'completed');
   }, [preparation]);
 
-  // Obtenir l'URL d'une photo
+  // Obtenir l'URL d'une photo pour une tâche donnée
   const getPhotoUrlByType = useCallback((taskType, photoType) => {
-    if (!preparation?.tasks[taskType]?.photos) return '';
-    const photo = preparation.tasks[taskType].photos[photoType];
-    return photo?.url || '';
+    if (!preparation || !preparation.tasks || !preparation.tasks[taskType] || !preparation.tasks[taskType].photos) {
+      return '';
+    }
+    
+    const photos = preparation.tasks[taskType].photos;
+    if (!photos[photoType]) return '';
+    
+    return photos[photoType].url || '';
   }, [preparation]);
 
-  // Affichages conditionnels
-  if (loading && !preparation) return (
-    <div>
-      <Navigation />
-      <div className="loading-container">
-        <LoadingSpinner />
+  // Affichage durant le chargement initial
+  if (loading && !preparation) {
+    return (
+      <div>
+        <Navigation />
+        <div className="loading-container">
+          <LoadingSpinner />
+          <p>Chargement de la préparation...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
   
+  // Affichage en cas d'erreur
   if (error && !preparation) {
     return (
       <div>
@@ -357,6 +347,7 @@ const PreparationDetail = () => {
           </Link>
         </div>
         
+        {/* Messages d'erreur et de succès */}
         {error && (
           <AlertMessage 
             type="error" 
@@ -373,9 +364,12 @@ const PreparationDetail = () => {
           />
         )}
         
+        {/* Contenu principal */}
         <div className="detail-card">
+          {/* Informations du véhicule */}
           <PreparationInfoSection preparation={preparation} />
           
+          {/* Section des tâches */}
           <div className="detail-section tasks-section">
             <h2 className="section-title">
               <i className="fas fa-tasks"></i> Tâches de préparation
@@ -383,13 +377,13 @@ const PreparationDetail = () => {
             <div className="task-grid">
               {taskTypes.map(taskType => (
                 <PreparationTaskSection
-                  key={taskType}
+                  key={`${taskType}-${refreshKey}`} // Forcer le remontage du composant
                   preparation={preparation}
                   taskType={taskType}
                   expandedTask={expandedTask}
                   onToggleTask={toggleTaskExpansion}
                   canEdit={canEdit()}
-                  onStartTask={(type, photo, notes) => handleTaskAction('startTask', type, photo, notes)}
+                  onStartTask={(type, notes) => handleTaskAction('startTask', type, notes)}
                   onCompleteTask={(type, photos, data) => handleTaskAction('completeTask', type, photos, data)}
                   onAddTaskPhoto={(type, photo, desc) => handleTaskAction('addTaskPhoto', type, photo, desc)}
                   onParkingTask={(type, photo, notes) => handleTaskAction('parkingTask', type, photo, notes)}
@@ -400,14 +394,17 @@ const PreparationDetail = () => {
             </div>
           </div>
           
+          {/* Section des notes */}
           <NotesSection
             notes={notes}
             onChange={setNotes}
             readOnly={preparation.status === 'completed' || !canEdit()}
           />
           
+          {/* Section des dates */}
           <PreparationDatesSection preparation={preparation} />
           
+          {/* Actions du bas de page */}
           <PreparationActions
             preparation={preparation}
             canEdit={canEdit()}
