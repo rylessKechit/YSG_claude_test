@@ -1,0 +1,120 @@
+.history-container{max-width:1000px;margin:0 auto;padding:2rem 1rem;}.page-title{font-size:1.75rem;font-weight:bold;margin-bottom:1.5rem;color:#1f2937;}.filters-section{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.5rem;background-color:white;padding:1rem;border-radius:0.5rem;box-shadow:0 1px 3px rgba(0, 0, 0, 0.1);}.search-container{flex:1;min-width:250px;}.search-form{display:flex;}.search-input{flex:1;min-width:0;padding:0.5rem;border:1px solid #d1d5db;border-radius:0.375rem 0 0 0.375rem;}.search-button{padding:0.5rem 1rem;background-color:#3b82f6;color:white;border:none;border-radius:0 0.375rem 0.375rem 0;cursor:pointer;}.search-button:hover{background-color:#2563eb;}.reset-button{margin-top:0.5rem;font-size:0.875rem;color:#4b5563;background:none;border:none;text-decoration:underline;cursor:pointer;}.filter-container{display:flex;align-items:center;gap:0.5rem;}.filter-label{font-size:0.875rem;color:#4b5563;}.status-filter{padding:0.5rem;border:1px solid #d1d5db;border-radius:0.375rem;}.movements-list{display:flex;flex-direction:column;gap:1.5rem;}.movement-card{background-color:white;border-radius:0.5rem;padding:1.5rem;box-shadow:0 1px 3px rgba(0, 0, 0, 0.1);}.movement-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;}.movement-plate{font-size:1.25rem;font-weight:600;color:#1f2937;}.movement-status{padding:0.25rem 0.75rem;border-radius:9999px;font-size:0.75rem;font-weight:600;}.status-pending{background-color:#fef3c7;color:#d97706;}.status-in-progress{background-color:#dbeafe;color:#3b82f6;}.status-completed{background-color:#d1fae5;color:#10b981;}.vehicle-model{margin-bottom:1rem;color:#6b7280;font-size:0.875rem;}.movement-route{position:relative;padding:1rem 0;}.route-point{display:flex;gap:1rem;position:relative;z-index:2;}.route-point:not(:last-child){margin-bottom:1.5rem;}.point-icon{width:1.5rem;height:1.5rem;border-radius:50%;flex-shrink:0;}.departure-icon{background-color:#3b82f6;}.arrival-icon{background-color:#10b981;}.route-line{position:absolute;top:1.5rem;left:0.75rem;bottom:1rem;width:2px;background-color:#e5e7eb;z-index:1;}.point-details{flex:1;}.point-label{font-size:0.875rem;color:#6b7280;margin-bottom:0.25rem;}.point-name{font-weight:500;margin-bottom:0.25rem;}.point-time{font-size:0.875rem;color:#6b7280;}.movement-footer{display:flex;justify-content:space-between;align-items:center;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e5e7eb;}.movement-date{font-size:0.875rem;color:#6b7280;}.view-details-link{color:#3b82f6;text-decoration:none;font-weight:500;}.view-details-link:hover{text-decoration:underline;}.pagination{display:flex;justify-content:center;align-items:center;gap:1rem;margin-top:2rem;}.pagination-button{padding:0.5rem 1rem;background-color:#f3f4f6;border:1px solid #d1d5db;border-radius:0.375rem;cursor:pointer;}.pagination-button:hover:not(:disabled){background-color:#e5e7eb;}.pagination-button:disabled{opacity:0.5;cursor:not-allowed;}.page-info{font-size:0.875rem;color:#6b7280;}.no-results{text-align:center;padding:3rem 1rem;background-color:white;border-radius:0.5rem;box-shadow:0 1px 3px rgba(0, 0, 0, 0.1);}.no-results p{margin-bottom:1.5rem;color:#6b7280;}.btn{display:inline-block;padding:0.5rem 1rem;border-radius:0.375rem;font-weight:500;text-decoration:none;cursor:pointer;transition:background-color 0.2s;}.btn-primary{background-color:#2563eb;color:white;border:none;}.btn-primary:hover{background-color:#1d4ed8;}.loading-container{display:flex;justify-content:center;align-items:center;padding:3rem 0;}.spinner{display:inline-block;width:2rem;height:2rem;border:3px solid rgba(0, 0, 0, 0.1);border-radius:50%;border-top-color:#3b82f6;animation:spin 1s ease-in-out infinite;}@keyframes spin{to{transform:rotate(360deg);}}@media (max-width:640px){.filters-section{flex-direction:column;align-items:stretch;}.filter-container{width:100%;}.status-filter{flex:1;}.movement-footer{flex-direction:column;gap:0.5rem;align-items:flex-start;}} /* Style pour la section des filtres */
+.filters-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background-color: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+/* Style pour le groupe de filtres */
+.filters-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+/* Style pour chaque conteneur de filtre */
+.filter-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 150px;
+}
+
+/* Style pour les labels des filtres */
+.filter-label {
+  margin-right: 10px;
+  white-space: nowrap;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+/* Style pour les selects des filtres */
+.status-filter,
+.date-filter {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+}
+
+/* Style pour le conteneur de recherche */
+.search-container {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+/* Style pour le formulaire de recherche */
+.search-form {
+  display: flex;
+  width: 100%;
+}
+
+/* Style pour le champ de recherche */
+.search-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px 0 0 6px;
+  min-width: 0;
+}
+
+/* Style pour le bouton de recherche */
+.search-button {
+  padding: 8px 15px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+}
+
+/* Style pour le bouton de réinitialisation */
+.reset-button {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #4b5563;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 5px 0;
+}
+
+/* Media queries pour les écrans plus petits */
+@media (max-width: 640px) {
+  .filters-section {
+    padding: 12px;
+  }
+  
+  .filters-group {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .filter-container {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  
+  .filter-label {
+    margin-bottom: 5px;
+    margin-right: 0;
+  }
+  
+  .status-filter,
+  .date-filter {
+    width: 100%;
+  }
+  
+  .search-button {
+    white-space: nowrap;
+  }
+}
