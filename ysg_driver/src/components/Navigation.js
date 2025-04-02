@@ -101,8 +101,10 @@ const Navigation = () => {
     <header className="header">
       <div className="container">
         <nav className="nav">
-          {/* Logo */}
-          <div className="nav-logo" onClick={() => goTo('/dashboard')}>YSG</div>
+          {/* Logo - Remplacé le texte par une image */}
+          <div className="nav-logo" onClick={() => goTo('/dashboard')}>
+            <img src="/assets/YSG_logo.png" alt="YSG" className="logo-image" />
+          </div>
           
           {/* Menu hamburger pour mobile */}
           {isMobile && (
