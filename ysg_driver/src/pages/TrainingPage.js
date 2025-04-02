@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import '../styles/Formation.css'; // Importer le fichier CSS pour le style
+import '../styles/Formation.css';
+ // Importer le fichier CSS pour le style
 
 // Composant principal de la page de formation
 const TrainingPage = () => {
   const [activeTab, setActiveTab] = useState('guide');
+
+  const S3_base_url = "https://ysg-driver-preparator.s3.eu-north-1.amazonaws.com"
+
+  const createMovementUrl = `${S3_base_url}/CreateMovement.mp4`;
+  const movementGuideUrl = `${S3_base_url}/MovementGuide.mp4`;
+  const preparationGuideUrl = `${S3_base_url}/PreparationGuide.mp4`;
 
   // Données pour les sections de formation
   const trainingData = {
@@ -389,58 +396,59 @@ const TrainingPage = () => {
             
             <div className="video-grid">
               <div className="video-card">
-                <div className="video-placeholder">
-                  <div className="video-icon">
-                    <i className="fas fa-play-circle"></i>
-                  </div>
-                  <p>Présentation générale de YSG Driver</p>
+                <div className="video-container">
+                  <video 
+                    controls 
+                    preload="metadata"
+                    poster="/assets/video-thumbnail.jpg"
+                    className="training-video"
+                  >
+                    <source src={createMovementUrl} type="video/mp4" />
+                    Votre navigateur ne supporte pas la lecture de vidéos.
+                  </video>
                 </div>
                 <div className="video-description">
-                  <h4>Présentation générale</h4>
-                  <p>Découvrez l'interface et les principales fonctionnalités de l'application</p>
-                  <p><strong>Durée:</strong> 3:45</p>
+                  <h4>Créer un mouvement</h4>
+                  <p>Apprenez à créer un nouveau mouvement de véhicule étape par étape</p>
+                  <p><strong>Format:</strong> MP4 (22.3 MB)</p>
                 </div>
               </div>
               
               <div className="video-card">
-                <div className="video-placeholder">
-                  <div className="video-icon">
-                    <i className="fas fa-play-circle"></i>
-                  </div>
-                  <p>Créer et gérer un mouvement de véhicule</p>
+                <div className="video-container">
+                  <video 
+                    controls 
+                    preload="metadata"
+                    poster="/assets/video-thumbnail.jpg"
+                    className="training-video"
+                  >
+                    <source src={movementGuideUrl} type="video/mp4" />
+                    Votre navigateur ne supporte pas la lecture de vidéos.
+                  </video>
                 </div>
                 <div className="video-description">
-                  <h4>Mouvements de véhicules</h4>
-                  <p>Apprenez à créer, suivre et terminer un mouvement de véhicule</p>
-                  <p><strong>Durée:</strong> 5:20</p>
+                  <h4>Guide des mouvements</h4>
+                  <p>Guide complet pour gérer les mouvements de véhicules de A à Z</p>
+                  <p><strong>Format:</strong> MP4 (90.2 MB)</p>
                 </div>
               </div>
               
               <div className="video-card">
-                <div className="video-placeholder">
-                  <div className="video-icon">
-                    <i className="fas fa-play-circle"></i>
-                  </div>
-                  <p>Créer et gérer une préparation de véhicule</p>
+                <div className="video-container">
+                  <video 
+                    controls 
+                    preload="metadata"
+                    poster="/assets/video-thumbnail.jpg"
+                    className="training-video"
+                  >
+                    <source src={preparationGuideUrl} type="video/mp4" />
+                    Votre navigateur ne supporte pas la lecture de vidéos.
+                  </video>
                 </div>
                 <div className="video-description">
-                  <h4>Préparations de véhicules</h4>
-                  <p>Découvrez le processus complet de préparation d'un véhicule</p>
-                  <p><strong>Durée:</strong> 4:15</p>
-                </div>
-              </div>
-              
-              <div className="video-card">
-                <div className="video-placeholder">
-                  <div className="video-icon">
-                    <i className="fas fa-play-circle"></i>
-                  </div>
-                  <p>Prendre et uploader des photos efficacement</p>
-                </div>
-                <div className="video-description">
-                  <h4>Gestion des photos</h4>
-                  <p>Conseils pour prendre des photos de qualité et les uploader rapidement</p>
-                  <p><strong>Durée:</strong> 3:50</p>
+                  <h4>Guide des préparations</h4>
+                  <p>Découvrez comment réaliser parfaitement les préparations de véhicules</p>
+                  <p><strong>Format:</strong> MP4 (147.3 MB)</p>
                 </div>
               </div>
             </div>
