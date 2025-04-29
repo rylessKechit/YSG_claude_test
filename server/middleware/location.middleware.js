@@ -20,14 +20,30 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 // Middleware pour vérifier l'IP et la géolocalisation
-// Dans votre fichier location.middleware.js (autour de la ligne 49)
-
 const verifyLocationAndIP = async (req, res, next) => {
   try {
-    // Code de vérification IP...
-
-    const clientIP = req.ip
-
+    // Exemption pour les rôles spécifiés
+    const exemptRoles = ['admin', 'driver', 'team-leader'];
+    
+    // Si l'utilisateur a un rôle exempté, passer directement à l'étape suivante
+    if (req.user && exemptRoles.includes(req.user.role)) {
+      // Stocker un indicateur montrant que l'exemption a été appliquée
+      req.locationExemption = true;
+      
+      // Stocker l'IP client pour la traçabilité, même pour les utilisateurs exemptés
+      req.clientIPAddress = req.ip;
+      
+      // Si les coordonnées sont fournies dans la requête, les stocker
+      const { latitude, longitude } = req.body;
+      if (latitude && longitude) {
+        req.locationName = "Localisation fournie (exemption de vérification)";
+      }
+      
+      return next();
+    }
+    
+    // Code de vérification IP pour les utilisateurs non-exemptés
+    const clientIP = req.ip;
     console.log('Client IP:', clientIP);
     
     // Récupérer toutes les plages IP actives
@@ -43,7 +59,7 @@ const verifyLocationAndIP = async (req, res, next) => {
       });
     }
     
-    // 2. Vérification de la géolocalisation
+    // Vérification de la géolocalisation
     const { latitude, longitude } = req.body;
     
     // Récupérer tous les emplacements actifs
@@ -51,7 +67,7 @@ const verifyLocationAndIP = async (req, res, next) => {
     
     // Initialiser ces variables AVANT de les utiliser
     let isLocationAllowed = false;
-    let closestLocation = null;  // Assurez-vous que cette déclaration est AVANT toute utilisation
+    let closestLocation = null;
     let minDistance = Infinity;
     
     // Vérifier si la position est dans au moins un des emplacements autorisés
@@ -79,7 +95,7 @@ const verifyLocationAndIP = async (req, res, next) => {
         message: 'Accès refusé: emplacement non autorisé',
         error: 'LOCATION_NOT_ALLOWED',
         details: {
-          closestLocation,  // Ici, closestLocation doit être initialisé
+          closestLocation,
           distance: Math.round(minDistance)
         }
       });

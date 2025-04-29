@@ -33,6 +33,8 @@ const DriverPerformance = lazy(() => import('./pages/DriverPerformance'));
 const LocationSettings = lazy(() => import('./pages/LocationSettings'));
 const DriverTrackingMap = lazy(() => import('./pages/DriverTrackingMap'));
 const TrainingPage = lazy(() => import('./pages/TrainingPage'));
+// Ajout de la nouvelle page de gestion des agences
+const AgencyManagement = lazy(() => import('./pages/AgencyManagement'));
 
 // Composant de route protégée
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
@@ -81,6 +83,9 @@ const routes = [
   { path: '/admin/movements/create', element: <AdminMovementCreate />, protected: true, roles: ['admin', 'team-leader'] },
   { path: '/admin/location', element: <LocationSettings />, protected: true, roles: ['admin'] },
   { path: '/tracking', element: <DriverTrackingMap />, protected: true, roles: ['admin', 'team-leader'] },
+  
+  // Nouvelle route pour la gestion des agences
+  { path: '/admin/agencies', element: <AgencyManagement />, protected: true, roles: ['admin', 'team-leader'] },
   
   // Routes Rapports (Admin et Direction)
   { path: '/reports', element: <Reports />, protected: true, roles: ['admin', 'direction'] },

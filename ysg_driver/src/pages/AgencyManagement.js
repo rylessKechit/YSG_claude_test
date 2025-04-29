@@ -1,17 +1,34 @@
-// ysg_driver/src/pages/AgencyManagement.js
-import React, { useState, useEffect } from 'react';
+// src/pages/AgencyManagement.js
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import agencyService from '../services/agencyService';
 import Navigation from '../components/Navigation';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
+import { GOOGLE_MAPS_API_KEY } from '../config';
 import '../styles/AgencyManagement.css';
+
+// Charger Google Maps API
+const loadGoogleMapsScript = (callback) => {
+  if (window.google && window.google.maps) {
+    callback();
+    return;
+  }
+  
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+  script.async = true;
+  script.defer = true;
+  script.onload = callback;
+  document.head.appendChild(script);
+};
 
 const AgencyManagement = () => {
   // États pour les agences et le formulaire
   const [agencies, setAgencies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [formMode, setFormMode] = useState('create'); // 'create' ou 'edit'
@@ -31,16 +48,58 @@ const AgencyManagement = () => {
   // Référence à l'agence en cours d'édition
   const [currentAgencyId, setCurrentAgencyId] = useState(null);
   
+  // Référence à l'autocomplete de Google
+  const autocompleteInputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+  
   // Hooks de routing et auth
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
-  // Vérifier que l'utilisateur est admin
+  // Vérifier que l'utilisateur est admin ou chef d'équipe
   useEffect(() => {
     if (currentUser && !['admin', 'team-leader'].includes(currentUser.role)) {
       navigate('/dashboard');
     }
   }, [currentUser, navigate]);
+  
+  // Initialiser Google Maps API
+  useEffect(() => {
+    loadGoogleMapsScript(() => {
+      setGoogleMapsLoaded(true);
+    });
+  }, []);
+  
+  // Configurer l'autocomplete de Google lorsque l'API est chargée
+  useEffect(() => {
+    if (googleMapsLoaded && autocompleteInputRef.current) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        autocompleteInputRef.current,
+        { types: ['address'] }
+      );
+      
+      // Écouter les changements d'adresse sélectionnée
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current.getPlace();
+        
+        if (!place.geometry) {
+          return;
+        }
+        
+        // Extraire les coordonnées
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        
+        // Mettre à jour le formulaire avec l'adresse complète et les coordonnées
+        setFormData(prev => ({
+          ...prev,
+          address: place.formatted_address || prev.address,
+          latitude: lat,
+          longitude: lng
+        }));
+      });
+    }
+  }, [googleMapsLoaded]);
   
   // Charger les agences
   const loadAgencies = async () => {
@@ -146,7 +205,7 @@ const AgencyManagement = () => {
     }
   };
   
-  // Supprimer une agence
+  // Supprimer une agence (seulement pour les admins)
   const deleteAgency = async (id) => {
     // Demander confirmation
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette agence ?')) {
@@ -178,6 +237,40 @@ const AgencyManagement = () => {
     }
   };
   
+  // Géocoder une adresse manuellement (au cas où l'autocomplete ne fonctionne pas)
+  const geocodeAddress = async () => {
+    if (!formData.address) {
+      setError('Veuillez entrer une adresse à géocoder');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const geocoder = new window.google.maps.Geocoder();
+      
+      geocoder.geocode({ 'address': formData.address }, (results, status) => {
+        setLoading(false);
+        
+        if (status === 'OK' && results[0]) {
+          const location = results[0].geometry.location;
+          setFormData(prev => ({
+            ...prev,
+            latitude: location.lat(),
+            longitude: location.lng()
+          }));
+          setSuccess('Coordonnées générées avec succès!');
+          setTimeout(() => setSuccess(null), 3000);
+        } else {
+          setError(`Impossible de géocoder l'adresse: ${status}`);
+        }
+      });
+    } catch (err) {
+      console.error('Erreur de géocodage:', err);
+      setError('Erreur lors du géocodage de l\'adresse');
+      setLoading(false);
+    }
+  };
+
   // Utiliser la position actuelle pour les coordonnées
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -192,6 +285,24 @@ const AgencyManagement = () => {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude
         }));
+        
+        // Si l'API Google Maps est chargée, essayer de faire le géocodage inverse
+        if (googleMapsLoaded) {
+          const geocoder = new window.google.maps.Geocoder();
+          const latlng = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          
+          geocoder.geocode({ 'location': latlng }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              setFormData(prev => ({
+                ...prev,
+                address: results[0].formatted_address
+              }));
+            }
+          });
+        }
         
         setSuccess('Position actuelle utilisée pour les coordonnées');
         setTimeout(() => setSuccess(null), 3000);
@@ -241,7 +352,19 @@ const AgencyManagement = () => {
                 onChange={handleInputChange}
                 required
                 className="form-input"
+                ref={autocompleteInputRef}
+                placeholder="Entrez une adresse (l'autocomplétion affichera des suggestions)"
               />
+              <div className="address-actions">
+                <button 
+                  type="button" 
+                  className="btn-secondary btn-sm"
+                  onClick={geocodeAddress}
+                  disabled={!formData.address || !googleMapsLoaded}
+                >
+                  <i className="fas fa-map-marker-alt"></i> Générer les coordonnées
+                </button>
+              </div>
             </div>
             
             <div className="form-row">
@@ -285,6 +408,7 @@ const AgencyManagement = () => {
             
             <div className="form-section">
               <h3 className="subsection-title">Coordonnées géographiques *</h3>
+              <p className="help-text">Les coordonnées sont générées automatiquement à partir de l'adresse. Vous pouvez également les saisir manuellement ou utiliser votre position actuelle.</p>
               
               <div className="form-row">
                 <div className="form-group">

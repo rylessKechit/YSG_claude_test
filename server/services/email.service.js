@@ -119,7 +119,7 @@ class EmailService {
       
       // Configuration de l'email
       const mailOptions = {
-        from: process.env.EMAIL_FROM || '"Système de Gestion des Chauffeurs" <noreply@example.com>',
+        from: process.env.EMAIL_FROM || '"YSG convoyage" <convoyages@yourservices-group.com>',
         to: Array.isArray(to) ? to.join(',') : to,
         subject,
         html
