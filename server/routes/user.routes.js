@@ -131,7 +131,7 @@ router.get('/:id', verifyToken, isAdmin, async (req, res) => {
 // Créer un nouvel utilisateur (admin seulement)
 router.post('/', verifyToken, isAdmin, async (req, res) => {
   try {
-    const { username, password, fullName, email, phone, role } = req.body;
+    const { username, password, fullName, email, phone, sixtNumber, role } = req.body;
     
     // Vérifier si l'utilisateur existe déjà
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
@@ -149,6 +149,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
       fullName,
       email,
       phone,
+      sixtNumber: sixtNumber || '',
       role: role || 'driver' // Par défaut, rôle de chauffeur
     });
     
@@ -162,6 +163,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
       fullName: newUser.fullName,
       email: newUser.email,
       phone: newUser.phone,
+      sixtNumber: newUser.sixtNumber,
       role: newUser.role
     };
     
@@ -178,7 +180,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
 // Mettre à jour un utilisateur (admin seulement)
 router.put('/:id', verifyToken, isAdmin, async (req, res) => {
   try {
-    const { username, fullName, email, phone, role } = req.body;
+    const { username, fullName, email, phone, sixtNumber, role } = req.body;
     
     // Vérifier si l'utilisateur existe
     const user = await User.findById(req.params.id);
@@ -212,6 +214,7 @@ router.put('/:id', verifyToken, isAdmin, async (req, res) => {
           fullName: fullName || user.fullName,
           email: email || user.email,
           phone: phone || user.phone,
+          sixtNumber: sixtNumber !== undefined ? sixtNumber : user.sixtNumber,
           role: role || user.role
         } 
       },

@@ -7,7 +7,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 // Route d'inscription
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, fullName, email, phone, role } = req.body;
+    const { username, password, fullName, email, phone, sixtNumber, role } = req.body;
     
     // Vérifier si l'utilisateur existe déjà
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
@@ -25,6 +25,7 @@ router.post('/register', async (req, res) => {
       fullName,
       email,
       phone,
+      sixtNumber: sixtNumber || '',
       role: role || 'driver' // Par défaut, rôle de chauffeur
     });
     
@@ -45,6 +46,7 @@ router.post('/register', async (req, res) => {
       fullName: newUser.fullName,
       email: newUser.email,
       phone: newUser.phone,
+      sixtNumber: newUser.sixtNumber,
       role: newUser.role
     };
     

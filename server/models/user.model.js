@@ -1,3 +1,4 @@
+// server/models/user.model.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -29,9 +30,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  sixtNumber: {
+    type: String,
+    default: ''
+  },
   role: {
     type: String,
-    enum: ['driver', 'admin', 'preparator', 'direction', 'team-leader'], // Mise à jour pour inclure tous les rôles
+    enum: ['driver', 'admin', 'preparator', 'direction', 'team-leader'],
     default: 'driver'
   }
 }, {
