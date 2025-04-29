@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{title}}</title>
+  <style>
+    body { 
+      font-family: Arial, Helvetica, sans-serif; 
+      line-height: 1.6; 
+      color: #333; 
+      margin: 0; 
+      padding: 0; 
+      background-color: #f4f4f4; 
+    }
+    
+    .container { 
+      max-width: 600px; 
+      margin: 0 auto; 
+      padding: 20px; 
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .header { 
+      background-color: #3b82f6; 
+      color: white; 
+      padding: 20px; 
+      text-align: center; 
+      border-radius: 5px 5px 0 0;
+    }
+    
+    .content { 
+      padding: 20px; 
+      border: 1px solid #ddd; 
+      border-top: none;
+      border-radius: 0 0 5px 5px;
+    }
+    
+    .route-info {
+      background-color: #f9fafb;
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 0 5px 5px 0;
+    }
+    
+    .departure-info {
+      margin-bottom: 20px;
+    }
+    
+    .arrival-info {
+      border-top: 1px dashed #ccc;
+      padding-top: 15px;
+    }
+    
+    .driver-info {
+      background-color: #f0f9ff;
+      border-left: 4px solid #0ea5e9;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 0 5px 5px 0;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      border-radius: 15px;
+      padding: 5px 12px;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+    
+    .status-pending { background-color: #fef3c7; color: #d97706; }
+    .status-assigned { background-color: #dbeafe; color: #2563eb; }
+    .status-preparing { background-color: #e0f2fe; color: #0369a1; }
+    .status-in-progress { background-color: #dbeafe; color: #2563eb; }
+    .status-completed { background-color: #d1fae5; color: #059669; }
+    .status-cancelled { background-color: #fee2e2; color: #dc2626; }
+    
+    .vehicle-details {
+      background-color: #f9fafb;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    
+    .vehicle-plate {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    
+    .notes-section {
+      background-color: #fffbeb;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      border-left: 4px solid #f59e0b;
+    }
+    
+    .footer { 
+      text-align: center; 
+      margin-top: 20px; 
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      font-size: 12px; 
+      color: #666; 
+    }
+    
+    h2 {
+      color: #2563eb;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 10px;
+    }
+    
+    h3 {
+      color: #374151;
+      margin-top: 20px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    
+    table th, table td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    
+    table th {
+      background-color: #f9fafb;
+    }
+    
+    .deadline-warning {
+      background-color: #fee2e2;
+      color: #b91c1c;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{title}}</h1>
+    </div>
+    <div class="content">
+      <div class="vehicle-details">
+        <div class="vehicle-plate">{{movement.licensePlate}}</div>
+        {{#if movement.vehicleModel}}<div>{{movement.vehicleModel}}</div>{{/if}}
+        <div class="status-badge status-{{movement.status}}">{{movement.status}}</div>
+      </div>
+      
+      <h2>Informations du convoyage</h2>
+      
+      <div class="route-info">
+        <div class="departure-info">
+          <h3>Départ</h3>
+          <div><strong>Agence:</strong> {{departureAgency.name}}</div>
+          <div><strong>Adresse:</strong> {{departureAgency.address}}</div>
+          <div><strong>Contact:</strong> {{departureAgency.contactPerson}}</div>
+          <div><strong>Téléphone:</strong> {{departureAgency.phone}}</div>
+          <div><strong>Email:</strong> {{departureAgency.email}}</div>
+          
+          {{#if movement.departureTime}}
+          <div><strong>Heure de départ:</strong> {{movement.departureTime}}</div>
+          {{/if}}
+        </div>
+        
+        <div class="arrival-info">
+          <h3>Arrivée</h3>
+          <div><strong>Agence:</strong> {{arrivalAgency.name}}</div>
+          <div><strong>Adresse:</strong> {{arrivalAgency.address}}</div>
+          <div><strong>Contact:</strong> {{arrivalAgency.contactPerson}}</div>
+          <div><strong>Téléphone:</strong> {{arrivalAgency.phone}}</div>
+          <div><strong>Email:</strong> {{arrivalAgency.email}}</div>
+          
+          {{#if movement.arrivalTime}}
+          <div><strong>Heure d'arrivée:</strong> {{movement.arrivalTime}}</div>
+          {{/if}}
+          
+          {{#if movement.deadline}}
+          <div><strong>Date limite d'arrivée:</strong> {{movement.deadline}}</div>
+          <div class="deadline-warning">Veuillez noter que le véhicule doit arriver avant la date et l'heure indiquées.</div>
+          {{/if}}
+        </div>
+      </div>
+      
+      {{#if driver}}
+      <div class="driver-info">
+        <h3>Chauffeur assigné</h3>
+        <div><strong>Nom:</strong> {{driver.fullName}}</div>
+        {{#if driver.phone}}<div><strong>Téléphone:</strong> {{driver.phone}}</div>{{/if}}
+        {{#if driver.email}}<div><strong>Email:</strong> {{driver.email}}</div>{{/if}}
+      </div>
+      {{else}}
+      <div class="driver-info">
+        <h3>Chauffeur</h3>
+        <div>Aucun chauffeur n'a encore été assigné à ce mouvement.</div>
+      </div>
+      {{/if}}
+      
+      {{#if movement.notes}}
+      <div class="notes-section">
+        <h3>Notes</h3>
+        <p>{{movement.notes}}</p>
+      </div>
+      {{/if}}
+      
+      <p>Ce message est généré automatiquement par le Système de Gestion des Chauffeurs. Veuillez ne pas y répondre.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; {{year}} Système de Gestion des Chauffeurs - Tous droits réservés</p>
+    </div>
+  </div>
+</body>
+</html>

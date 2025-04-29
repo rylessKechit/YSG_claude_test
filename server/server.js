@@ -13,7 +13,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT;
 
-
 // Connexion à la base de données
 connectDB().then(() => {
   require('./services/whatsapp.service');
@@ -38,6 +37,7 @@ const routes = [
   { path: '/api/timelogs', module: require('./routes/timelog.routes'), auth: true },
   { path: '/api/movements', module: require('./routes/movement.routes'), auth: true },
   { path: '/api/preparations', module: require('./routes/preparation.routes'), auth: true },
+  { path: '/api/agencies', module: require('./routes/agency.routes'), auth: true }, // Nouvelle route pour les agences
   { path: '/api/reports', module: require('./routes/report.routes'), auth: true },
   { path: '/api/schedules', module: require('./routes/schedule.routes'), auth: true },
   { path: '/api/admin', module: require('./routes/admin.routes'), auth: true },
@@ -56,7 +56,8 @@ routes.forEach(route => {
 app.get('/', (req, res) => {
   res.json({ 
     message: 'API de gestion des chauffeurs fonctionne correctement!',
-    s3Status: process.env.AWS_S3_BUCKET ? 'S3 configuré' : 'S3 non configuré'
+    s3Status: process.env.AWS_S3_BUCKET ? 'S3 configuré' : 'S3 non configuré',
+    emailStatus: process.env.EMAIL_HOST ? 'Email configuré' : 'Email non configuré'
   });
 });
 

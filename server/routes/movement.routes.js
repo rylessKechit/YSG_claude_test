@@ -95,126 +95,171 @@ router.post('/:id/prepare',verifyToken,async(req,res)=>{
   }
 });
 
-router.post('/:id/start',verifyToken,async(req,res)=>{
-  try{
-    const movement=await Movement.findOne({_id:req.params.id,userId:req.user._id});
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
-    if(movement.status!=='assigned'&&movement.status!=='preparing')
-      return res.status(400).json({message:'Ce mouvement ne peut pas être démarré'});
+router.post('/:id/start', verifyToken, async (req, res) => {
+  try {
+    const movement = await Movement.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    if (movement.status !== 'assigned' && movement.status !== 'preparing')
+      return res.status(400).json({ message: 'Ce mouvement ne peut pas être démarré' });
     
-    const activeTimeLog=await TimeLog.findOne({userId:req.user._id,status:'active'});
-    if(!activeTimeLog)return res.status(400).json({message:'Vous devez être en service pour démarrer un mouvement'});
+    const activeTimeLog = await TimeLog.findOne({ userId: req.user._id, status: 'active' });
+    if (!activeTimeLog) return res.status(400).json({ message: 'Vous devez être en service pour démarrer un mouvement' });
     
-    movement.status='in-progress';
-    movement.departureTime=new Date();
-    if(!movement.timeLogId)movement.timeLogId=activeTimeLog._id;
+    // Utiliser le service pour mettre à jour le statut (enverra une notification si nécessaire)
+    const updatedMovement = await movementService.updateMovementStatus(movement._id, 'in-progress');
     
-    await movement.save();
-    res.json({message:'Mouvement démarré avec succès',movement});
-  }catch(e){
-    console.error('Erreur lors du démarrage du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+    // Dans le cas où le service ne définit pas la date de départ, le faire manuellement
+    if (!updatedMovement.departureTime) {
+      updatedMovement.departureTime = new Date();
+      await updatedMovement.save();
+    }
+    
+    // S'assurer que le timeLogId est défini
+    if (!updatedMovement.timeLogId) {
+      updatedMovement.timeLogId = activeTimeLog._id;
+      await updatedMovement.save();
+    }
+    
+    res.json({ message: 'Mouvement démarré avec succès', movement: updatedMovement });
+  } catch (e) {
+    console.error('Erreur lors du démarrage du mouvement:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
-router.post('/:id/assign',verifyToken,canAssignMovement,async(req,res)=>{
-  try{
-    const{userId}=req.body;
-    if(!userId)return res.status(400).json({message:'ID du chauffeur requis'});
+router.post('/:id/assign', verifyToken, canAssignMovement, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: 'ID du chauffeur requis' });
     
-    const movement=await Movement.findById(req.params.id);
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
+    const movement = await Movement.findById(req.params.id)
+      .populate('departureAgencyId')
+      .populate('arrivalAgencyId');
     
-    const driver=await User.findById(userId);
-    if(!driver)return res.status(404).json({message:'Chauffeur non trouvé'});
-    if(driver.role!=='driver')return res.status(400).json({message:'L\'utilisateur sélectionné n\'est pas un chauffeur'});
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
     
-    const activeTimeLog=await checkDriverActiveTimeLog(userId);
+    const driver = await User.findById(userId);
+    if (!driver) return res.status(404).json({ message: 'Chauffeur non trouvé' });
+    if (driver.role !== 'driver') return res.status(400).json({ message: 'L\'utilisateur sélectionné n\'est pas un chauffeur' });
     
-    movement.userId=userId;
-    movement.timeLogId=activeTimeLog?activeTimeLog._id:null;
-    movement.status='assigned';
+    const activeTimeLog = await checkDriverActiveTimeLog(userId);
+    
+    movement.userId = userId;
+    movement.timeLogId = activeTimeLog ? activeTimeLog._id : null;
+    movement.status = 'assigned';
     
     await movement.save();
     
-    try{await sendWhatsAppNotif(driver.phone,movement);}
-    catch(whatsappError){console.error('Erreur lors de l\'envoi de la notification WhatsApp:',whatsappError);}
+    // Si les agences sont définies, envoyer une notification par email
+    if (movement.departureAgencyId && movement.arrivalAgencyId) {
+      await movementService.resendMovementNotification(movement._id);
+    }
+    
+    // Envoyer une notification WhatsApp si possible
+    try {
+      await sendWhatsAppNotif(driver.phone, movement);
+    } catch (whatsappError) {
+      console.error('Erreur lors de l\'envoi de la notification WhatsApp:', whatsappError);
+    }
     
     res.json({
-      message:activeTimeLog?'Chauffeur assigné et prêt pour le mouvement':'Chauffeur assigné mais hors service',
-      movement,notificationSent:whatsAppService.isClientReady()
+      message: activeTimeLog ? 'Chauffeur assigné et prêt pour le mouvement' : 'Chauffeur assigné mais hors service',
+      movement,
+      notificationSent: whatsAppService.isClientReady()
     });
-  }catch(e){
-    console.error('Erreur lors de l\'assignation du chauffeur:',e);
-    res.status(500).json({message:'Erreur serveur'});
+  } catch (e) {
+    console.error('Erreur lors de l\'assignation du chauffeur:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Récupérer chauffeurs en service
-router.get('/drivers-on-duty',verifyToken,canCreateMovement,async(req,res)=>{
-  try{
-    const activeLogs=await TimeLog.find({status:'active'}).populate('userId','username fullName email phone role');
-    const driversOnDuty=activeLogs.filter(l=>l.userId.role==='driver').map(l=>({
-      _id:l.userId._id,username:l.userId.username,fullName:l.userId.fullName,
-      email:l.userId.email,phone:l.userId.phone,serviceStartTime:l.startTime
-    }));
+router.get('/drivers-on-duty', verifyToken, canCreateMovement, async (req, res) => {
+  try {
+    const activeLogs = await TimeLog.find({ status: 'active' }).populate('userId', 'username fullName email phone role');
+    const driversOnDuty = activeLogs
+      .filter(l => l.userId.role === 'driver')
+      .map(l => ({
+        _id: l.userId._id,
+        username: l.userId.username,
+        fullName: l.userId.fullName,
+        email: l.userId.email,
+        phone: l.userId.phone,
+        serviceStartTime: l.startTime
+      }));
+    
     res.json(driversOnDuty);
-  }catch(e){
-    console.error('Erreur lors de la récupération des chauffeurs en service:',e);
-    res.status(500).json({message:'Erreur serveur'});
+  } catch (e) {
+    console.error('Erreur lors de la récupération des chauffeurs en service:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Terminer un mouvement
-router.post('/:id/complete',verifyToken,async(req,res)=>{
-  try{
-    const movement=await Movement.findOne({_id:req.params.id,userId:req.user._id});
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
-    if(movement.status!=='in-progress')
-      return res.status(400).json({message:'Ce mouvement ne peut pas être terminé'});
+router.post('/:id/complete', verifyToken, async (req, res) => {
+  try {
+    const movement = await Movement.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    if (movement.status !== 'in-progress')
+      return res.status(400).json({ message: 'Ce mouvement ne peut pas être terminé' });
     
-    const{notes}=req.body;
-    movement.status='completed';
-    movement.arrivalTime=new Date();
-    if(notes)movement.notes=notes;
+    const { notes } = req.body;
     
-    await movement.save();
-    res.json({message:'Mouvement terminé avec succès',movement});
-  }catch(e){
-    console.error('Erreur lors de la fin du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+    // Utiliser le service pour mettre à jour le statut avec notification
+    const updatedMovement = await movementService.updateMovementStatus(movement._id, 'completed');
+    
+    // Mettre à jour les notes si fournies
+    if (notes) {
+      updatedMovement.notes = notes;
+      await updatedMovement.save();
+    }
+    
+    res.json({ message: 'Mouvement terminé avec succès', movement: updatedMovement });
+  } catch (e) {
+    console.error('Erreur lors de la fin du mouvement:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Supprimer/Annuler mouvement
-router.delete('/:id',verifyToken,canAssignMovement,async(req,res)=>{
-  try{
-    const movement=await Movement.findById(req.params.id);
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
-    if(movement.status==='in-progress'||movement.status==='completed')
-      return res.status(400).json({message:'Impossible de supprimer un mouvement qui est déjà en cours ou terminé'});
+router.delete('/:id', verifyToken, canAssignMovement, async (req, res) => {
+  try {
+    const movement = await Movement.findById(req.params.id);
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    if (movement.status === 'in-progress' || movement.status === 'completed')
+      return res.status(400).json({ message: 'Impossible de supprimer un mouvement qui est déjà en cours ou terminé' });
     
     await Movement.findByIdAndDelete(req.params.id);
-    res.json({message:'Mouvement supprimé avec succès'});
-  }catch(e){
-    console.error('Erreur lors de la suppression du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+    res.json({ message: 'Mouvement supprimé avec succès' });
+  } catch (e) {
+    console.error('Erreur lors de la suppression du mouvement:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
-router.post('/:id/cancel',verifyToken,canCreateMovement,async(req,res)=>{
-  try{
-    const movement=await Movement.findById(req.params.id);
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
-    if(movement.status==='completed')
-      return res.status(400).json({message:'Un mouvement terminé ne peut pas être annulé'});
+router.post('/:id/cancel', verifyToken, canCreateMovement, async (req, res) => {
+  try {
+    const movement = await Movement.findById(req.params.id)
+      .populate('departureAgencyId')
+      .populate('arrivalAgencyId')
+      .populate('userId', 'fullName email phone');
     
-    movement.status='cancelled';
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
+    if (movement.status === 'completed')
+      return res.status(400).json({ message: 'Un mouvement terminé ne peut pas être annulé' });
+    
+    movement.status = 'cancelled';
     await movement.save();
-    res.json({message:'Mouvement annulé avec succès',movement});
-  }catch(e){
-    console.error('Erreur lors de l\'annulation du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+    
+    // Si les agences sont définies, envoyer une notification d'annulation
+    if (movement.departureAgencyId && movement.arrivalAgencyId) {
+      await movementService.resendMovementNotification(movement._id);
+    }
+    
+    res.json({ message: 'Mouvement annulé avec succès', movement });
+  } catch (e) {
+    console.error('Erreur lors de l\'annulation du mouvement:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
@@ -413,76 +458,82 @@ router.post('/:id/photos/batch', verifyToken, uploadMiddleware.array('photos'), 
 });
 
 // Obtenir tous les mouvements
-router.get('/',verifyToken,async(req,res)=>{
-  try{
-    const{page=1,limit=10,status}=req.query,
-          skip=(page-1)*limit,
-          query={};
+router.get('/', verifyToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (page - 1) * limit;
+    const query = {};
     
-    if(req.user.role==='driver')query.userId=req.user._id;
-    if(status)query.status=status;
+    if (req.user.role === 'driver') query.userId = req.user._id;
+    if (status) query.status = status;
     
-    let sortOptions=status==='pending'||status==='assigned'||!status?
-                    {'deadline':1,'createdAt':-1}:{'createdAt':-1};
+    let sortOptions = status === 'pending' || status === 'assigned' || !status ?
+                      { 'deadline': 1, 'createdAt': -1 } : { 'createdAt': -1 };
     
-    const movements=await Movement.find(query)
+    const movements = await Movement.find(query)
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('userId','username fullName')
-      .populate('assignedBy','username fullName');
+      .populate('userId', 'username fullName')
+      .populate('assignedBy', 'username fullName')
+      .populate('departureAgencyId', 'name email')
+      .populate('arrivalAgencyId', 'name email');
     
-    const total=await Movement.countDocuments(query);
+    const total = await Movement.countDocuments(query);
     
     res.json({
       movements,
-      totalPages:Math.ceil(total/limit),
-      currentPage:parseInt(page),
-      totalItems:total
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      totalItems: total
     });
-  }catch(e){
-    console.error('Erreur lors de la récupération des mouvements:',e);
-    res.status(500).json({message:'Erreur serveur'});
+  } catch (e) {
+    console.error('Erreur lors de la récupération des mouvements:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Rechercher des mouvements
-router.get('/search',verifyToken,async(req,res)=>{
-  try{
-    const{licensePlate}=req.query;
-    if(!licensePlate)return res.status(400).json({message:'Plaque d\'immatriculation requise pour la recherche'});
+router.get('/search', verifyToken, async (req, res) => {
+  try {
+    const { licensePlate } = req.query;
+    if (!licensePlate) return res.status(400).json({ message: 'Plaque d\'immatriculation requise pour la recherche' });
     
-    const query={licensePlate:{$regex:new RegExp(licensePlate,'i')}};
-    if(req.user.role==='driver')query.userId=req.user._id;
+    const query = { licensePlate: { $regex: new RegExp(licensePlate, 'i') } };
+    if (req.user.role === 'driver') query.userId = req.user._id;
     
-    const movements=await Movement.find(query)
-      .sort({createdAt:-1})
-      .populate('userId','username fullName')
-      .populate('assignedBy','username fullName');
+    const movements = await Movement.find(query)
+      .sort({ createdAt: -1 })
+      .populate('userId', 'username fullName')
+      .populate('assignedBy', 'username fullName')
+      .populate('departureAgencyId', 'name email')
+      .populate('arrivalAgencyId', 'name email');
     
-    res.json({movements,totalItems:movements.length});
-  }catch(e){
-    console.error('Erreur lors de la recherche de mouvements:',e);
-    res.status(500).json({message:'Erreur serveur'});
+    res.json({ movements, totalItems: movements.length });
+  } catch (e) {
+    console.error('Erreur lors de la recherche de mouvements:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Obtenir un mouvement spécifique
-router.get('/:id',verifyToken,async(req,res)=>{
-  try{
-    const query={_id:req.params.id};
-    if(req.user.role==='driver')query.userId=req.user._id;
+router.get('/:id', verifyToken, async (req, res) => {
+  try {
+    const query = { _id: req.params.id };
+    if (req.user.role === 'driver') query.userId = req.user._id;
     
-    const movement=await Movement.findOne(query)
-      .populate('userId','username fullName')
-      .populate('assignedBy','username fullName');
+    const movement = await Movement.findOne(query)
+      .populate('userId', 'username fullName email phone')
+      .populate('assignedBy', 'username fullName')
+      .populate('departureAgencyId')
+      .populate('arrivalAgencyId');
     
-    if(!movement)return res.status(404).json({message:'Mouvement non trouvé'});
+    if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
     
     res.json(movement);
-  }catch(e){
-    console.error('Erreur lors de la récupération du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+  } catch (e) {
+    console.error('Erreur lors de la récupération du mouvement:', e);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
