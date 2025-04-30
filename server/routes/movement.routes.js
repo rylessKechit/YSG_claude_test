@@ -1,4 +1,5 @@
 const router=require('express').Router(),Movement=require('../models/movement.model'),TimeLog=require('../models/timelog.model'),User=require('../models/user.model'),{verifyToken,canCreateMovement,canAssignMovement}=require('../middleware/auth.middleware'),uploadMiddleware=require('../middleware/upload.middleware'),whatsAppService=require('../services/whatsapp.service');
+const movementService = require('../services/movementService');
 
 const checkDriverActiveTimeLog=async id=>await TimeLog.findOne({userId:id,status:'active'});
 
@@ -13,42 +14,33 @@ const sendWhatsAppNotif=async(phone,movement)=>{
   await whatsAppService.sendMessage(phone,msg);
 };
 
-// Créer un nouveau mouvement
-router.post('/',verifyToken,canCreateMovement,async(req,res)=>{
-  try{
-    const{userId,licensePlate,vehicleModel,departureLocation,arrivalLocation,deadline,notes}=req.body;
-    if(!licensePlate||!departureLocation||!arrivalLocation)
-      return res.status(400).json({message:'Plaque d\'immatriculation, lieu de départ et lieu d\'arrivée sont requis'});
+router.post('/', verifyToken, canCreateMovement, async (req, res) => {
+  try {
+    // Récupérer les données du mouvement
+    const movementData = req.body;
     
-    let timeLogId=null,driver=null;
-    if(userId){
-      driver=await User.findById(userId);
-      if(!driver)return res.status(404).json({message:'Chauffeur non trouvé'});
-      if(driver.role!=='driver')return res.status(400).json({message:'L\'utilisateur sélectionné n\'est pas un chauffeur'});
-      const activeTimeLog=await checkDriverActiveTimeLog(userId);
-      if(activeTimeLog)timeLogId=activeTimeLog._id;
+    // Utiliser le service pour créer le mouvement
+    // C'est le service qui s'occupera d'envoyer les emails si nécessaire
+    const movement = await movementService.createMovement(movementData, req.user);
+    
+    // Vérifier si des notifications d'email ont été envoyées
+    const emailSent = movement.emailNotifications && movement.emailNotifications.length > 0 && 
+                     movement.emailNotifications[0].success;
+    
+    // Message de réponse
+    let message = 'Mouvement créé avec succès';
+    if (emailSent) {
+      message += '. Les agences ont été notifiées par email';
     }
     
-    const movement=new Movement({
-      assignedBy:req.user._id,
-      licensePlate,vehicleModel,
-      departureLocation,arrivalLocation,
-      status:userId?'assigned':'pending',
-      notes,deadline:deadline||null
+    res.status(201).json({
+      message,
+      movement,
+      emailSent
     });
-    
-    if(userId){
-      movement.userId=userId;
-      movement.timeLogId=timeLogId;
-      if(driver.phone)await sendWhatsAppNotif(driver.phone,movement);
-    }
-    
-    await movement.save();
-    let message=userId?(timeLogId?'Mouvement créé et assigné au chauffeur en service':'Mouvement créé et assigné au chauffeur (hors service)'):'Mouvement créé sans chauffeur assigné';
-    res.status(201).json({message,movement});
-  }catch(e){
-    console.error('Erreur lors de la création du mouvement:',e);
-    res.status(500).json({message:'Erreur serveur'});
+  } catch (error) {
+    console.error('Erreur lors de la création du mouvement:', error);
+    res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 });
 

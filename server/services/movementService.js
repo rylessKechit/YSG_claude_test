@@ -22,10 +22,23 @@ class MovementService {
         
         // Si l'agence est trouvée, utiliser ses coordonnées et son nom
         if (departureAgency) {
+          // S'assurer que les coordonnées sont correctement formatées
+          if (!departureAgency.location || !departureAgency.location.coordinates) {
+            console.warn('⚠️ Agence de départ sans coordonnées, utilisation de valeurs par défaut');
+            departureAgency.location = departureAgency.location || {};
+            departureAgency.location.coordinates = departureAgency.location.coordinates || {
+              latitude: 0,
+              longitude: 0
+            };
+          }
+          
+          // Assigner les valeurs de l'agence au lieu de départ
           movementData.departureLocation = {
             name: departureAgency.name,
             coordinates: departureAgency.location.coordinates
           };
+        } else {
+          console.warn(`⚠️ Agence de départ non trouvée avec ID: ${movementData.departureAgencyId}`);
         }
       }
       
@@ -34,49 +47,81 @@ class MovementService {
         
         // Si l'agence est trouvée, utiliser ses coordonnées et son nom
         if (arrivalAgency) {
+          // S'assurer que les coordonnées sont correctement formatées
+          if (!arrivalAgency.location || !arrivalAgency.location.coordinates) {
+            console.warn('⚠️ Agence d\'arrivée sans coordonnées, utilisation de valeurs par défaut');
+            arrivalAgency.location = arrivalAgency.location || {};
+            arrivalAgency.location.coordinates = arrivalAgency.location.coordinates || {
+              latitude: 0,
+              longitude: 0
+            };
+          }
+          
+          // Assigner les valeurs de l'agence au lieu d'arrivée
           movementData.arrivalLocation = {
             name: arrivalAgency.name,
             coordinates: arrivalAgency.location.coordinates
           };
+        } else {
+          console.warn(`⚠️ Agence d'arrivée non trouvée avec ID: ${movementData.arrivalAgencyId}`);
         }
       }
       
-      // Créer le mouvement
+      // Créer le mouvement avec les références explicites aux agences
       const movement = new Movement({
         ...movementData,
-        assignedBy: user._id
+        assignedBy: user._id,
+        emailNotifications: [], // Initialiser le tableau des notifications
+        // S'assurer que les références d'agence sont explicitement définies
+        departureAgencyId: departureAgency ? departureAgency._id : null,
+        arrivalAgencyId: arrivalAgency ? arrivalAgency._id : null
       });
       
-      // Récupérer les informations du chauffeur si assigné
-      let driverInfo = null;
-      if (movement.userId) {
-        driverInfo = await User.findById(movement.userId).select('fullName email phone');
-      }
+      await movement.save();
       
       // Si les deux agences sont définies, envoyer une notification par email
       if (departureAgency && arrivalAgency) {
-        const emailResult = await emailService.sendMovementNotification(
-          movement, 
-          departureAgency, 
-          arrivalAgency, 
-          driverInfo
-        );
-        
-        // Enregistrer le résultat de l'envoi d'email
-        movement.emailNotifications.push({
-          sentAt: new Date(),
-          recipients: [departureAgency.email, arrivalAgency.email].filter(Boolean),
-          success: emailResult.success,
-          error: emailResult.error
-        });
+        try {
+          // Recharger les agences complètes
+          const refreshedDepartureAgency = await Agency.findById(departureAgency._id);
+          const refreshedArrivalAgency = await Agency.findById(arrivalAgency._id);
+          
+          const emailResult = await emailService.sendMovementNotification(
+            movement, 
+            refreshedDepartureAgency || departureAgency, 
+            refreshedArrivalAgency || arrivalAgency, 
+            driverInfo
+          );
+          
+          // Enregistrer le résultat de l'envoi d'email
+          movement.emailNotifications.push({
+            sentAt: new Date(),
+            recipients: [departureAgency.email, arrivalAgency.email].filter(Boolean),
+            success: emailResult.success,
+            error: emailResult.error
+          });
+          
+          // Sauvegarder à nouveau le mouvement avec les données de notification
+          await movement.save();
+        } catch (emailError) {
+          console.error('❌ Erreur lors de l\'envoi de la notification email:', emailError);
+          
+          // Enregistrer l'échec de l'envoi d'email
+          movement.emailNotifications.push({
+            sentAt: new Date(),
+            recipients: [departureAgency.email, arrivalAgency.email].filter(Boolean),
+            success: false,
+            error: emailError.message
+          });
+          
+          // Sauvegarder quand même le mouvement
+          await movement.save();
+        }
       }
-      
-      // Sauvegarder le mouvement
-      await movement.save();
       
       return movement;
     } catch (error) {
-      console.error('Erreur lors de la création du mouvement:', error);
+      console.error('❌ Erreur lors de la création du mouvement:', error);
       throw error;
     }
   }
