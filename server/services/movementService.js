@@ -5,12 +5,13 @@ const User = require('../models/user.model');
 const emailService = require('./email.service');
 
 class MovementService {
+
   /**
-   * Gère la création d'un nouveau mouvement avec envoi d'email aux agences
-   * @param {Object} movementData - Données du mouvement à créer
-   * @param {Object} user - Utilisateur qui crée le mouvement
-   * @returns {Promise<Object>} Mouvement créé
-   */
+ * Gère la création d'un nouveau mouvement avec envoi d'email aux agences
+ * @param {Object} movementData - Données du mouvement à créer
+ * @param {Object} user - Utilisateur qui crée le mouvement
+ * @returns {Promise<Object>} Mouvement créé
+ */
   async createMovement(movementData, user) {
     try {
       // Récupérer les informations des agences si des IDs sont fournis
@@ -67,6 +68,30 @@ class MovementService {
         }
       }
       
+      // Vérifier si un chauffeur est assigné
+      let driver = null;
+      let activeTimeLog = null;
+      
+      if (movementData.userId) {
+        // Récupérer les informations du chauffeur
+        driver = await User.findById(movementData.userId);
+        
+        // Vérifier si le chauffeur a un timelog actif
+        if (driver) {
+          const TimeLog = require('../models/timelog.model');
+          activeTimeLog = await TimeLog.findOne({ 
+            userId: driver._id, 
+            status: 'active' 
+          });
+          
+          // Mettre à jour le statut en fonction de l'état du chauffeur
+          if (activeTimeLog) {
+            movementData.status = 'assigned';
+            movementData.timeLogId = activeTimeLog._id;
+          }
+        }
+      }
+      
       // Créer le mouvement avec les références explicites aux agences
       const movement = new Movement({
         ...movementData,
@@ -82,6 +107,8 @@ class MovementService {
       // Si les deux agences sont définies, envoyer une notification par email
       if (departureAgency && arrivalAgency) {
         try {
+          console.log('📧 Préparation de l\'envoi d\'email aux agences');
+          
           // Recharger les agences complètes
           const refreshedDepartureAgency = await Agency.findById(departureAgency._id);
           const refreshedArrivalAgency = await Agency.findById(arrivalAgency._id);
@@ -90,19 +117,26 @@ class MovementService {
             movement, 
             refreshedDepartureAgency || departureAgency, 
             refreshedArrivalAgency || arrivalAgency, 
-            driverInfo
+            driver  // Passer le driver si disponible (corrigé ici)
           );
           
           // Enregistrer le résultat de l'envoi d'email
           movement.emailNotifications.push({
             sentAt: new Date(),
-            recipients: [departureAgency.email, arrivalAgency.email].filter(Boolean),
+            recipients: emailResult.recipients || [
+              departureAgency.email, 
+              arrivalAgency.email
+            ].filter(Boolean),
             success: emailResult.success,
             error: emailResult.error
           });
           
           // Sauvegarder à nouveau le mouvement avec les données de notification
           await movement.save();
+          
+          console.log(emailResult.success ? 
+            '✅ Email envoyé avec succès aux agences' : 
+            `❌ Échec de l'envoi d'email: ${emailResult.error}`);
         } catch (emailError) {
           console.error('❌ Erreur lors de l\'envoi de la notification email:', emailError);
           

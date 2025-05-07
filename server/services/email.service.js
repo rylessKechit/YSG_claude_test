@@ -248,13 +248,29 @@ class EmailService {
         throw new Error('Les informations d\'agence sont requises');
       }
       
-      // Préparation des destinataires
-      const recipients = [departureAgency.email, arrivalAgency.email].filter(Boolean);
+      // Préparation des destinataires - S'assurer que les deux emails sont inclus
+      const recipients = [];
+      
+      // Ajouter l'email de l'agence de départ s'il existe
+      if (departureAgency.email) {
+        recipients.push(departureAgency.email);
+      } else {
+        console.warn('⚠️ L\'agence de départ n\'a pas d\'email');
+      }
+      
+      // Ajouter l'email de l'agence d'arrivée s'il existe
+      if (arrivalAgency.email) {
+        recipients.push(arrivalAgency.email);
+      } else {
+        console.warn('⚠️ L\'agence d\'arrivée n\'a pas d\'email');
+      }
       
       if (recipients.length === 0) {
         console.error('❌ Erreur: Aucune adresse email d\'agence disponible');
         throw new Error('Aucune adresse email d\'agence disponible');
       }
+      
+      console.log(`📧 Envoi de notification aux destinataires: ${recipients.join(', ')}`);
       
       // Générer le PDF de bon de commande
       const pdfBuffer = await this.generateOrderPDF(movement, departureAgency, arrivalAgency, driverInfo);
@@ -273,10 +289,10 @@ class EmailService {
         </div>
       `;
       
-      // Configuration de l'email
+      // Configuration de l'email - Envoyer explicitement à tous les destinataires
       const mailOptions = {
         from: process.env.EMAIL_FROM || '"YSG Convoyage" <convoyages@yourservices-group.com>',
-        to: Array.isArray(recipients) ? recipients.join(',') : recipients,
+        to: recipients.join(','),  // Tous les destinataires comme destinataires principaux
         subject,
         html: htmlBody,
         attachments: [
@@ -291,9 +307,12 @@ class EmailService {
       // Envoyer l'email
       const info = await this.transporter.sendMail(mailOptions);
       
+      console.log(`✅ Email envoyé avec succès aux agences (ID: ${info.messageId})`);
+      
       return {
         success: true,
         messageId: info.messageId,
+        recipients: recipients,
         info
       };
     } catch (error) {
@@ -356,13 +375,144 @@ class EmailService {
     }
   }
 
+  /**
+ * Envoie une notification à l'agence d'arrivée lorsqu'un chauffeur démarre un mouvement
+ * @param {Object} movement - Le mouvement démarré
+ * @param {Object} departureAgency - L'agence de départ
+ * @param {Object} arrivalAgency - L'agence d'arrivée
+ * @param {Object} driver - Le chauffeur
+ * @returns {Promise<Object>} Résultat de l'envoi
+ */
+async sendDepartureNotification(movement, departureAgency, arrivalAgency, driver = null) {
+  try {
+    // Vérifier que l'agence d'arrivée est définie et a un email
+    if (!arrivalAgency || !arrivalAgency.email) {
+      console.error('❌ Erreur: Informations d\'agence d\'arrivée manquantes ou sans email');
+      throw new Error('Les informations de l\'agence d\'arrivée sont requises');
+    }
+    
+    // Récupérer l'email de l'agence d'arrivée
+    const recipient = arrivalAgency.email;
+    console.log(`📧 Envoi de notification de départ à: ${recipient}`);
+    
+    // Construire le sujet avec des informations utiles
+    const subject = `🚗 Véhicule ${movement.licensePlate} en route - Arrivée prévue`;
+    
+    // Calculer l'heure d'arrivée estimée si définie
+    let estimatedArrival = 'Non définie';
+    if (movement.arrivalTime) {
+      estimatedArrival = new Date(movement.arrivalTime).toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } else if (movement.departureTime) {
+      // Si l'heure d'arrivée n'est pas définie mais l'heure de départ oui,
+      // estimer l'arrivée en ajoutant un temps par défaut (par exemple 2 heures)
+      const estimatedTime = new Date(movement.departureTime);
+      estimatedTime.setHours(estimatedTime.getHours() + 2); // Ajouter 2 heures
+      estimatedArrival = estimatedTime.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' (estimation)';
+    }
+    
+    // Formater l'heure de départ
+    const departureTime = movement.departureTime 
+      ? new Date(movement.departureTime).toLocaleString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      : 'Non définie';
+    
+    // Corps du message HTML
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #2563eb; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px;">Notification de départ d'un véhicule</h2>
+        
+        <p>Bonjour,</p>
+        
+        <p>Nous vous informons qu'un véhicule est maintenant <strong style="color: #2563eb;">en route</strong> vers votre agence.</p>
+        
+        <div style="background-color: #f3f4f6; padding: 15px; border-left: 4px solid #3b82f6; margin: 20px 0; border-radius: 0 5px 5px 0;">
+          <h3 style="margin-top: 0; color: #1e40af;">Détails du véhicule</h3>
+          <p><strong>Immatriculation:</strong> ${movement.licensePlate}</p>
+          ${movement.vehicleModel ? `<p><strong>Modèle:</strong> ${movement.vehicleModel}</p>` : ''}
+          <p><strong>Statut:</strong> <span style="color: #2563eb; font-weight: bold;">En route</span></p>
+        </div>
+        
+        <div style="background-color: #f0f9ff; padding: 15px; border-left: 4px solid #0ea5e9; margin: 20px 0; border-radius: 0 5px 5px 0;">
+          <h3 style="margin-top: 0; color: #0369a1;">Informations de trajet</h3>
+          <p><strong>Départ de:</strong> ${departureAgency ? departureAgency.name : movement.departureLocation.name}</p>
+          <p><strong>Arrivée à:</strong> ${arrivalAgency ? arrivalAgency.name : movement.arrivalLocation.name}</p>
+          <p><strong>Heure de départ:</strong> ${departureTime}</p>
+          <p><strong>Arrivée prévue:</strong> ${estimatedArrival}</p>
+        </div>
+        
+        ${driver ? `
+        <div style="background-color: #f0fdf4; padding: 15px; border-left: 4px solid #10b981; margin: 20px 0; border-radius: 0 5px 5px 0;">
+          <h3 style="margin-top: 0; color: #047857;">Chauffeur</h3>
+          <p><strong>Nom:</strong> ${driver.fullName}</p>
+        </div>
+        ` : ''}
+        
+        ${movement.notes ? `
+        <div style="background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0; border-radius: 0 5px 5px 0;">
+          <h3 style="margin-top: 0; color: #b45309;">Notes</h3>
+          <p>${movement.notes}</p>
+        </div>
+        ` : ''}
+        
+        <p>Veuillez préparer la réception de ce véhicule. Pour toute question concernant ce mouvement, n'hésitez pas à nous contacter.</p>
+        
+        <p>Cordialement,<br>L'équipe Your Services Group</p>
+      </div>
+    `;
+    
+    // Configuration de l'email
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || '"YSG Convoyage" <convoyages@yourservices-group.com>',
+      to: recipient,
+      subject,
+      html: htmlBody
+    };
+    
+    // Ajouter le département en copie si un email est défini
+    if (departureAgency && departureAgency.email) {
+      mailOptions.cc = departureAgency.email;
+    }
+    
+    // Envoyer l'email
+    const info = await this.transporter.sendMail(mailOptions);
+    
+    console.log(`✅ Notification de départ envoyée avec succès à ${recipient} (ID: ${info.messageId})`);
+    
+    return {
+      success: true,
+      messageId: info.messageId,
+      recipients: [recipient]
+    };
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'envoi de la notification de départ:', error);
+    return { success: false, error: error.message };
+  }
+}
+
   // Nouvelle méthode pour générer un PDF similaire à l'exemple fourni
   async generateOrderPDF(movement, departureAgency, arrivalAgency, driverInfo) {
     return new Promise(async (resolve, reject) => {
       try {
         // Calculer la distance réelle entre les agences via Google Maps API
         let distance = null;
-        
+
         // Vérifier si nous avons les coordonnées des deux agences
         if (departureAgency?.location?.coordinates && arrivalAgency?.location?.coordinates) {
           try {
@@ -382,10 +532,17 @@ class EmailService {
                 !isNaN(arrivalCoords.latitude) && !isNaN(arrivalCoords.longitude)) {
               
               // Calculer la distance réelle entre les agences
-              const routeDistance = await this.calculateDistance(
+              // CORRECTION : Assignez le résultat à la variable distance
+              distance = await this.calculateDistance(
                 departureCoords,
                 arrivalCoords
               );
+              
+              if (distance) {
+                console.log(`✅ Distance calculée avec succès: ${distance.toFixed(2)} km`);
+              } else {
+                console.warn('⚠️ Le calcul de distance a retourné null');
+              }
             } else {
               console.error(`❌ Coordonnées invalides après conversion: ` +
                             `${JSON.stringify(departureCoords)} -> ${JSON.stringify(arrivalCoords)}`);
@@ -393,10 +550,6 @@ class EmailService {
           } catch (distanceError) {
             console.error('❌ Erreur lors du calcul de la distance:', distanceError);
           }
-        } else {
-          console.log('⚠️ Coordonnées manquantes pour une ou les deux agences');
-          console.log('- Départ:', JSON.stringify(departureAgency?.location?.coordinates || 'Manquant'));
-          console.log('- Arrivée:', JSON.stringify(arrivalAgency?.location?.coordinates || 'Manquant'));
         }
         
         // Si la distance n'a pas pu être calculée, utiliser une valeur par défaut
@@ -523,16 +676,14 @@ class EmailService {
         doc.moveTo(350, signatureY).lineTo(550, signatureY).stroke();
         doc.text('Signature du conducteur', 350, signatureY + 5);
         
-        // Texte légal en petit
-        const legalY = signatureY + 40;
-        doc.fontSize(8);
+        doc.fontSize((6.5));
         doc.text('Les chargements et déchargements doivent avoir lieu durant les horaires d\'ouverture de l\'agence. Le prestataire en charge du transport est responsable de la vérification de l\'état des véhicules. Toute anomalie doit être signalée sur le bon de transport.',
-          50, legalY, { align: 'justify', width: 500 });
+          50, signatureY + 300, { align: 'center', width: 500 });
         doc.text('Veuillez-vous référer au contrat cadre de transport pour les modalités détaillées.',
-          50, legalY + 25, { align: 'justify', width: 500 });
+          50, signatureY + 315, { align: 'center', width: 500 });
         
         // Note finale
-        doc.text('Ceci est une commande électronique et est valable sans signature.', 50, legalY + 50, { align: 'center', width: 500 });
+        doc.text('Ceci est une commande électronique et est valable sans signature.', 50, signatureY + 330, { align: 'center', width: 500 });
         
         // Finaliser le document
         doc.end();

@@ -1,31 +1,118 @@
 const router=require('express').Router(),Movement=require('../models/movement.model'),TimeLog=require('../models/timelog.model'),User=require('../models/user.model'),{verifyToken,canCreateMovement,canAssignMovement}=require('../middleware/auth.middleware'),uploadMiddleware=require('../middleware/upload.middleware'),whatsAppService=require('../services/whatsapp.service');
 const movementService = require('../services/movementService');
+const emailService = require('../services/email.service');
 
 const checkDriverActiveTimeLog=async id=>await TimeLog.findOne({userId:id,status:'active'});
 
-const sendWhatsAppNotif=async(phone,movement)=>{
-  if(!whatsAppService.isClientReady()||!phone)return;
-  let msg=`🚗 Nouveau mouvement assigné!\n\nVéhicule: ${movement.licensePlate}\nDépart: ${movement.departureLocation.name}\nArrivée: ${movement.arrivalLocation.name}\n\n`;
-  if(movement.deadline){
-    const d=new Date(movement.deadline);
-    msg+=`⏰ Deadline: ${d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}\n\n`;
+const sendWhatsAppNotif = async (phone, movement) => {
+  try {
+    // Vérifier si le client est prêt
+    if (!whatsAppService.isClientReady()) {
+      console.log('⚠️ Client WhatsApp non prêt pour l\'envoi de message');
+      return { success: false, reason: 'CLIENT_NOT_READY' };
+    }
+    
+    // Vérifier si le numéro de téléphone est valide
+    if (!phone || phone.trim() === '') {
+      console.log('⚠️ Numéro de téléphone manquant');
+      return { success: false, reason: 'PHONE_MISSING' };
+    }
+    
+    // Construire le message
+    let msg = `🚗 Nouveau mouvement assigné!\n\nVéhicule: ${movement.licensePlate}\nDépart: ${movement.departureLocation.name}\nArrivée: ${movement.arrivalLocation.name}\n\n`;
+    
+    if (movement.deadline) {
+      const d = new Date(movement.deadline);
+      msg += `⏰ Deadline: ${d.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })}\n\n`;
+    }
+    
+    msg += `Statut: ${movement.status === 'assigned' ? 'Prêt à démarrer' : 'En attente'}\nPour plus de détails, consultez l'application.`;
+    
+    // Nettoyer le numéro de téléphone
+    const cleanedPhone = phone.replace(/\s+/g, '');
+    console.log(`📱 Tentative d'envoi WhatsApp au numéro: ${cleanedPhone}`);
+    
+    // Vérifier si le numéro est valide sur WhatsApp
+    const isValidNumber = await whatsAppService.isValidWhatsAppNumber(cleanedPhone);
+    if (!isValidNumber) {
+      console.log(`⚠️ Le numéro ${cleanedPhone} n'est pas valide sur WhatsApp`);
+      return { success: false, reason: 'INVALID_WHATSAPP_NUMBER' };
+    }
+    
+    // Envoyer le message
+    const result = await whatsAppService.sendMessage(cleanedPhone, msg);
+    console.log(`✅ Message WhatsApp envoyé avec succès au numéro ${cleanedPhone}`);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`❌ Erreur lors de l'envoi du message WhatsApp:`, error);
+    return { success: false, reason: 'ERROR', error: error.message };
   }
-  msg+=`Statut: ${movement.status==='assigned'?'Prêt à démarrer':'En attente'}\nPour plus de détails, consultez l'application.`;
-  await whatsAppService.sendMessage(phone,msg);
 };
 
 router.post('/', verifyToken, canCreateMovement, async (req, res) => {
   try {
-    // Récupérer les données du mouvement
-    const movementData = req.body;
+    // Extraction de l'ID du chauffeur si présent
+    const { userId, ...movementDataWithoutDriver } = req.body;
+    const hasDriver = !!userId;
     
-    // Utiliser le service pour créer le mouvement
-    // C'est le service qui s'occupera d'envoyer les emails si nécessaire
-    const movement = await movementService.createMovement(movementData, req.user);
+    // Créer d'abord le mouvement sans chauffeur
+    const movement = await movementService.createMovement(movementDataWithoutDriver, req.user);
     
     // Vérifier si des notifications d'email ont été envoyées
     const emailSent = movement.emailNotifications && movement.emailNotifications.length > 0 && 
                      movement.emailNotifications[0].success;
+    
+    // Si un chauffeur est spécifié, utiliser la route d'assignation
+    let assignmentResult = null;
+    if (hasDriver) {
+      try {
+        console.log(`Chauffeur spécifié (ID: ${userId}), appel de la route d'assignation`);
+        
+        // Simulation de l'appel à la route d'assignation (utiliser la logique directement)
+        const driver = await User.findById(userId);
+        if (!driver) {
+          throw new Error('Chauffeur non trouvé');
+        }
+        
+        const activeTimeLog = await checkDriverActiveTimeLog(userId);
+        
+        movement.userId = userId;
+        movement.timeLogId = activeTimeLog ? activeTimeLog._id : null;
+        movement.status = 'assigned';
+        movement.assignedBy = req.user._id;
+        
+        await movement.save();
+        
+        // Envoyer notification WhatsApp si possible
+        let whatsappSent = false;
+        try {
+          if (driver.phone) {
+            await sendWhatsAppNotif(driver.phone, movement);
+            whatsappSent = whatsAppService.isClientReady();
+          }
+        } catch (whatsappError) {
+          console.error('Erreur lors de l\'envoi de la notification WhatsApp:', whatsappError);
+        }
+        
+        assignmentResult = {
+          success: true,
+          whatsappSent,
+          message: activeTimeLog ? 'Chauffeur assigné et prêt pour le mouvement' : 'Chauffeur assigné mais hors service'
+        };
+      } catch (assignError) {
+        console.error('Erreur lors de l\'assignation du chauffeur:', assignError);
+        assignmentResult = {
+          success: false,
+          error: assignError.message
+        };
+      }
+    }
     
     // Message de réponse
     let message = 'Mouvement créé avec succès';
@@ -33,10 +120,23 @@ router.post('/', verifyToken, canCreateMovement, async (req, res) => {
       message += '. Les agences ont été notifiées par email';
     }
     
+    if (assignmentResult && assignmentResult.success) {
+      message += '. ' + assignmentResult.message;
+    }
+    
+    // Recharger le mouvement avec toutes les références pour la réponse
+    const updatedMovement = await Movement.findById(movement._id)
+      .populate('userId', 'username fullName')
+      .populate('assignedBy', 'username fullName')
+      .populate('departureAgencyId', 'name email')
+      .populate('arrivalAgencyId', 'name email');
+    
     res.status(201).json({
       message,
-      movement,
-      emailSent
+      movement: updatedMovement,
+      emailSent,
+      driverAssigned: hasDriver && assignmentResult && assignmentResult.success,
+      assignmentResult
     });
   } catch (error) {
     console.error('Erreur lors de la création du mouvement:', error);
@@ -89,7 +189,11 @@ router.post('/:id/prepare',verifyToken,async(req,res)=>{
 
 router.post('/:id/start', verifyToken, async (req, res) => {
   try {
-    const movement = await Movement.findOne({ _id: req.params.id, userId: req.user._id });
+    const movement = await Movement.findOne({ _id: req.params.id, userId: req.user._id })
+      .populate('departureAgencyId')
+      .populate('arrivalAgencyId')
+      .populate('userId', 'fullName email phone');
+    
     if (!movement) return res.status(404).json({ message: 'Mouvement non trouvé' });
     if (movement.status !== 'assigned' && movement.status !== 'preparing')
       return res.status(400).json({ message: 'Ce mouvement ne peut pas être démarré' });
@@ -97,7 +201,7 @@ router.post('/:id/start', verifyToken, async (req, res) => {
     const activeTimeLog = await TimeLog.findOne({ userId: req.user._id, status: 'active' });
     if (!activeTimeLog) return res.status(400).json({ message: 'Vous devez être en service pour démarrer un mouvement' });
     
-    // Utiliser le service pour mettre à jour le statut (enverra une notification si nécessaire)
+    // Utiliser le service pour mettre à jour le statut
     const updatedMovement = await movementService.updateMovementStatus(movement._id, 'in-progress');
     
     // Dans le cas où le service ne définit pas la date de départ, le faire manuellement
@@ -112,7 +216,39 @@ router.post('/:id/start', verifyToken, async (req, res) => {
       await updatedMovement.save();
     }
     
-    res.json({ message: 'Mouvement démarré avec succès', movement: updatedMovement });
+    // Envoyer une notification spécifique à l'agence d'arrivée
+    let emailResult = { success: false };
+    
+    if (movement.arrivalAgencyId) {
+      try {
+        // Utilisez le service email pour envoyer une notification de départ
+        emailResult = await emailService.sendDepartureNotification(
+          updatedMovement, 
+          movement.departureAgencyId,
+          movement.arrivalAgencyId,
+          movement.userId
+        );
+        
+        // Enregistrer le résultat de l'envoi d'email
+        updatedMovement.emailNotifications.push({
+          sentAt: new Date(),
+          recipients: [movement.arrivalAgencyId.email].filter(Boolean),
+          success: emailResult.success,
+          error: emailResult.error,
+          type: 'departure_notification'
+        });
+        
+        await updatedMovement.save();
+      } catch (emailError) {
+        console.error('Erreur lors de l\'envoi de la notification de départ:', emailError);
+      }
+    }
+    
+    res.json({ 
+      message: 'Mouvement démarré avec succès', 
+      movement: updatedMovement,
+      emailSent: emailResult.success
+    });
   } catch (e) {
     console.error('Erreur lors du démarrage du mouvement:', e);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -147,21 +283,31 @@ router.post('/:id/assign', verifyToken, canAssignMovement, async (req, res) => {
       await movementService.resendMovementNotification(movement._id);
     }
     
-    // Envoyer une notification WhatsApp si possible
-    try {
-      await sendWhatsAppNotif(driver.phone, movement);
-    } catch (whatsappError) {
-      console.error('Erreur lors de l\'envoi de la notification WhatsApp:', whatsappError);
+    // Envoyer une notification WhatsApp et récupérer le résultat
+    let whatsappResult = { success: false, reason: 'NOT_ATTEMPTED' };
+    
+    if (driver.phone) {
+      whatsappResult = await sendWhatsAppNotif(driver.phone, movement);
+      if (!whatsappResult.success) {
+        console.log(`⚠️ Échec de l'envoi WhatsApp: ${whatsappResult.reason}`, whatsappResult.error || '');
+      }
+    } else {
+      console.log('⚠️ Le chauffeur n\'a pas de numéro de téléphone enregistré');
+      whatsappResult = { success: false, reason: 'NO_PHONE_NUMBER' };
     }
     
     res.json({
       message: activeTimeLog ? 'Chauffeur assigné et prêt pour le mouvement' : 'Chauffeur assigné mais hors service',
       movement,
-      notificationSent: whatsAppService.isClientReady()
+      whatsappNotification: {
+        attempted: true,
+        success: whatsappResult.success,
+        reason: whatsappResult.reason || null
+      }
     });
   } catch (e) {
     console.error('Erreur lors de l\'assignation du chauffeur:', e);
-    res.status(500).json({ message: 'Erreur serveur' });
+    res.status(500).json({ message: 'Erreur serveur', error: e.message });
   }
 });
 

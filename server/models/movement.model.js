@@ -37,7 +37,13 @@ const emailNotificationSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  error: String
+  error: String,
+  // Nouveau champ pour distinguer les types de notifications
+  type: {
+    type: String,
+    enum: ['creation', 'assignment', 'departure_notification', 'arrival_notification', 'status_update'],
+    default: 'status_update'
+  }
 });
 
 const movementSchema = new mongoose.Schema({

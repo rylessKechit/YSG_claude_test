@@ -1,0 +1,122 @@
+/* Section Notes - optimisée */
+.notes-section {
+  padding: 16px;
+  background-color: #f8f9ff;
+  border-radius: 10px;
+  border-left: 4px solid #818cf8;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.notes-section h2 {
+  color: #4f46e5;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-section h2 i {
+  color: #818cf8;
+  font-size: 1.1em;
+}
+
+.notes-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  resize: vertical;
+  background-color: white;
+  transition: border-color 0.2s;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-size: 0.9rem;
+}
+
+.notes-textarea:focus {
+  border-color: #818cf8;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2), inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.notes-badge {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  background-color: #818cf8;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.notes-content {
+  background-color: white;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 80px;
+  color: #4b5563;
+  white-space: pre-wrap;
+  border: 1px solid #e5e7eb;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+@media (max-width: 360px) {
+  .detail-title {
+    font-size: 1.3rem;
+  }
+  
+  .task-status, .dates-badge, .notes-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+  
+  .task-header {
+    padding: 10px 12px;
+  }
+  
+  .task-title {
+    font-size: 0.9rem;
+  }
+  
+  .vehicle-info h2,
+  .notes-section h2,
+  .dates-section h2 {
+    font-size: 1.1rem;
+  }
+}
+
+/* Styles simplifiés pour les sections Notes et Dates */
+
+/* Styles communs pour les deux sections */
+.notes-section-simple {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.notes-title,
+.dates-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.notes-title i,
+.dates-title i {
+  color: #6366f1;
+  font-size: 16px;
+}
