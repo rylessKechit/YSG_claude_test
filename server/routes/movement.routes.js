@@ -168,6 +168,65 @@ router.get('/all-drivers',verifyToken,canAssignMovement,async(req,res)=>{
   }
 });
 
+// Route pour obtenir l'URL du bon de commande
+router.get('/:id/orderform', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Vérifier si l'utilisateur est autorisé à accéder au mouvement
+    const query = { _id: id };
+    if (req.user.role === 'driver') {
+      query.userId = req.user._id;
+    }
+    
+    const movement = await Movement.findOne(query);
+    
+    if (!movement) {
+      return res.status(404).json({ message: 'Mouvement non trouvé' });
+    }
+    
+    // Vérifier si le bon de commande existe
+    if (!movement.orderForm || !movement.orderForm.url) {
+      // Si les agences sont spécifiées, essayer de générer le bon de commande
+      if (movement.departureAgencyId && movement.arrivalAgencyId) {
+        try {
+          const orderFormService = require('../services/orderForm.service');
+          const result = await orderFormService.regenerateOrderForm(id);
+          
+          return res.json({
+            success: true,
+            orderFormUrl: result.url
+          });
+        } catch (error) {
+          return res.status(500).json({
+            success: false,
+            message: 'Impossible de générer le bon de commande',
+            error: error.message
+          });
+        }
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'Bon de commande non disponible pour ce mouvement'
+        });
+      }
+    }
+    
+    // Retourner l'URL du bon de commande
+    res.json({
+      success: true,
+      orderFormUrl: movement.orderForm.url
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération du bon de commande:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur',
+      error: error.message
+    });
+  }
+});
+
 // Préparation, démarrage, assignation mouvement
 router.post('/:id/prepare',verifyToken,async(req,res)=>{
   try{

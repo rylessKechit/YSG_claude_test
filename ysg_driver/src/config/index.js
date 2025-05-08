@@ -24,7 +24,8 @@ export const ENDPOINTS = {
     PHOTOS: (id) => `/movements/${id}/photos`,
     BATCH_PHOTOS: (id) => `/movements/${id}/photos/batch`,
     BATCH_S3_PHOTOS: (id) => `/movements/${id}/photos/batch-s3`, // Endpoint pour S3 direct
-    RESEND_EMAIL: (id) => `/movements/${id}/resend-notification`
+    RESEND_EMAIL: (id) => `/movements/${id}/resend-notification`,
+    ORDER_FORM: (id) => `/movements/${id}/orderform`
   },
   PREPARATIONS: {
     BASE: '/preparations',

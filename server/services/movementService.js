@@ -3,6 +3,7 @@ const Movement = require('../models/movement.model');
 const Agency = require('../models/agency.model');
 const User = require('../models/user.model');
 const emailService = require('./email.service');
+const orderFormService = require('./orderForm.service');
 
 class MovementService {
 
@@ -104,7 +105,7 @@ class MovementService {
       
       await movement.save();
       
-      // Si les deux agences sont définies, envoyer une notification par email
+      // Si les deux agences sont définies, générer le bon de commande et envoyer une notification par email
       if (departureAgency && arrivalAgency) {
         try {
           console.log('📧 Préparation de l\'envoi d\'email aux agences');
@@ -113,11 +114,20 @@ class MovementService {
           const refreshedDepartureAgency = await Agency.findById(departureAgency._id);
           const refreshedArrivalAgency = await Agency.findById(arrivalAgency._id);
           
+          // Générer et stocker le bon de commande
+          const pdfResult = await orderFormService.generateAndStoreOrderForm(
+            movement,
+            refreshedDepartureAgency || departureAgency,
+            refreshedArrivalAgency || arrivalAgency,
+            driver
+          );
+          
+          // Envoyer l'email avec le bon de commande en pièce jointe
           const emailResult = await emailService.sendMovementNotification(
             movement, 
             refreshedDepartureAgency || departureAgency, 
             refreshedArrivalAgency || arrivalAgency, 
-            driver  // Passer le driver si disponible (corrigé ici)
+            driver
           );
           
           // Enregistrer le résultat de l'envoi d'email
@@ -137,6 +147,10 @@ class MovementService {
           console.log(emailResult.success ? 
             '✅ Email envoyé avec succès aux agences' : 
             `❌ Échec de l'envoi d'email: ${emailResult.error}`);
+          
+          console.log(pdfResult.url ? 
+            '✅ Bon de commande généré et stocké avec succès' : 
+            '❌ Échec de la génération du bon de commande');
         } catch (emailError) {
           console.error('❌ Erreur lors de l\'envoi de la notification email:', emailError);
           
@@ -180,6 +194,16 @@ class MovementService {
       // Vérifier si les références aux agences existent
       if (!movement.departureAgencyId || !movement.arrivalAgencyId) {
         throw new Error('Les références aux agences sont manquantes');
+      }
+      
+      // Vérifier si le bon de commande existe, sinon le créer
+      if (!movement.orderForm || !movement.orderForm.url) {
+        await orderFormService.generateAndStoreOrderForm(
+          movement,
+          movement.departureAgencyId,
+          movement.arrivalAgencyId,
+          movement.userId
+        );
       }
       
       // Envoyer la notification
@@ -249,6 +273,16 @@ class MovementService {
       if (movement.departureAgencyId && movement.arrivalAgencyId && 
           (status === 'in-progress' || status === 'completed')) {
         
+        // Vérifier si le bon de commande existe, sinon le créer
+        if (!movement.orderForm || !movement.orderForm.url) {
+          await orderFormService.generateAndStoreOrderForm(
+            movement,
+            movement.departureAgencyId,
+            movement.arrivalAgencyId,
+            movement.userId
+          );
+        }
+        
         const emailResult = await emailService.sendMovementNotification(
           movement, 
           movement.departureAgencyId, 
@@ -275,6 +309,20 @@ class MovementService {
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut du mouvement:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Récupère l'URL du bon de commande pour un mouvement
+   * @param {string} movementId - ID du mouvement
+   * @returns {Promise<string|null>} URL du bon de commande ou null en cas d'erreur
+   */
+  async getOrderFormUrl(movementId) {
+    try {
+      return await orderFormService.getOrderFormUrl(movementId);
+    } catch (error) {
+      console.error('Erreur lors de la récupération de l\'URL du bon de commande:', error);
+      return null;
     }
   }
 }

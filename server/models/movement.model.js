@@ -46,6 +46,22 @@ const emailNotificationSchema = new mongoose.Schema({
   }
 });
 
+// Nouveau schéma pour le bon de commande
+const orderFormSchema = new mongoose.Schema({
+  url: {
+    type: String,
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  version: {
+    type: Number,
+    default: 1
+  }
+});
+
 const movementSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -120,7 +136,9 @@ const movementSchema = new mongoose.Schema({
     type: String
   },
   // Nouveau champ pour suivre les notifications d'email
-  emailNotifications: [emailNotificationSchema]
+  emailNotifications: [emailNotificationSchema],
+  // Nouveau champ pour le bon de commande
+  orderForm: orderFormSchema
 }, {
   timestamps: true
 });

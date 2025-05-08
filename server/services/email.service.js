@@ -695,6 +695,44 @@ async sendDepartureNotification(movement, departureAgency, arrivalAgency, driver
     });
   }
 
+  async generateAndStoreOrderPDF(movement, departureAgency, arrivalAgency, driverInfo) {
+    // Générer le PDF comme avant
+    const pdfBuffer = await emailService.generateOrderPDF(
+      movement, departureAgency, arrivalAgency, driverInfo
+    );
+    
+    // Créer un nom de fichier unique
+    const fileName = `order_${movement._id}_${Date.now()}.pdf`;
+    
+    // Stocker le PDF sur S3 (similaire à uploadService.uploadDirect)
+    const { presignedUrl, fileUrl } = await uploadService.getPresignedUrl(
+      'application/pdf',
+      fileName,
+      'orders'
+    );
+    
+    // Upload direct vers S3
+    await fetch(presignedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: pdfBuffer
+    });
+    
+    // Mettre à jour le mouvement avec l'URL du PDF
+    movement.orderForm = {
+      url: fileUrl,
+      createdAt: new Date(),
+      version: 1
+    };
+    
+    await movement.save();
+    
+    return {
+      buffer: pdfBuffer,
+      url: fileUrl
+    };
+  }
+
   // Fonction utilitaire pour traduire les statuts
   translateStatus(status) {
     const statusMap = {

@@ -8,6 +8,8 @@ const { verifyToken } = require('./middleware/auth.middleware');
 const path = require('path');
 const fs = require('fs');
 
+const proxyRoutes = require('./routes/proxy.routes');
+
 // Configuration et initialisation
 dotenv.config();
 const app = express();
@@ -26,6 +28,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.use('/api/proxy', proxyRoutes);
 
 // Importer les routes d'upload
 const uploadRoutes = require('./routes/upload.routes');
