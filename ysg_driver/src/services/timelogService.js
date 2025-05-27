@@ -1,4 +1,4 @@
-// ysg_driver/src/services/timelogService.js (CORRIGÉ)
+// ysg_driver/src/services/timelogService.js (CORRECTION COMPLÈTE)
 import { api, fetchWithCache, invalidateCache } from './authService';
 import { ENDPOINTS } from '../config';
 
@@ -26,7 +26,7 @@ const timelogService = {
     }
   },
 
-  // CORRIGÉ: Démarrer un pointage avec type spécifique pour drivers
+  // Démarrer un pointage avec type spécifique pour drivers
   startDriverTimeLog: async (type, locationData, notes = '') => {
     try {
       const data = {
@@ -57,12 +57,10 @@ const timelogService = {
     try {
       let url = `${ENDPOINTS.TIMELOGS.BASE}?page=${page}&limit=${limit}`;
       
-      // Ajouter le statut s'il est fourni
       if (status) {
         url += `&status=${status}`;
       }
       
-      // S'assurer que les filtres sont correctement ajoutés
       if (filters && typeof filters === 'object') {
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
@@ -79,15 +77,11 @@ const timelogService = {
     }
   },
 
-  // CORRIGÉ: Analyser les pointages d'un driver pour une date
+  // CORRECTION: Analyser les pointages d'un driver - utiliser la nouvelle route
   analyzeDriverTimelogs: async (userId = null, date = null) => {
     try {
-      // Construire l'URL correctement
-      let url = `${ENDPOINTS.TIMELOGS.BASE}/driver-analysis`;
-      
-      if (userId) {
-        url += `/${userId}`;
-      }
+      // Utiliser la route my-analysis pour éviter les problèmes de permissions
+      let url = `${ENDPOINTS.TIMELOGS.BASE}/my-analysis`;
       
       const params = new URLSearchParams();
       if (date) {

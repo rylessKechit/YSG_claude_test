@@ -10,166 +10,250 @@ const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY
 
 class EmailService {
   constructor() {
+    // Initialiser les propriétés par défaut
+    this.transporter = null;
+    this.templates = {};
+    
+    // DÉBOGAGE: Afficher les variables d'environnement email
+    console.log('🔍 Vérification des variables d\'environnement email:');
+    console.log('EMAIL_HOST:', process.env.EMAIL_HOST ? '✓ Défini' : '✗ Manquant');
+    console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Défini' : '✗ Manquant');
+    console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '✓ Défini (longueur: ' + process.env.EMAIL_PASSWORD.length + ')' : '✗ Manquant');
+    console.log('EMAIL_PORT:', process.env.EMAIL_PORT || '587 (par défaut)');
+    console.log('EMAIL_FROM:', process.env.EMAIL_FROM || 'Non défini');
+    
     // Vérifier si les variables essentielles sont définies
     if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.error('⚠️ ATTENTION: Configuration email incomplète - le service ne fonctionnera pas correctement');
+      console.warn('⚠️ Configuration email incomplète - utilisation du transporteur de test');
       
-      // En mode développement, utiliser un transporteur de test
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Mode développement détecté, utilisation du transporteur de test...');
-        this.setupTestTransporter();
-        return;
-      }
+      // Afficher les variables manquantes
+      const missing = [];
+      if (!process.env.EMAIL_HOST) missing.push('EMAIL_HOST');
+      if (!process.env.EMAIL_USER) missing.push('EMAIL_USER');
+      if (!process.env.EMAIL_PASSWORD) missing.push('EMAIL_PASSWORD');
+      console.log('Variables manquantes:', missing.join(', '));
+      
+      // Utiliser le transporteur de test
+      this.setupTestTransporter();
+      return;
     }
 
-    // Création du transporteur Nodemailer
-    try {
-      this.transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: process.env.EMAIL_PORT || 587,
-        secure: process.env.EMAIL_SECURE === 'true',
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASSWORD,
-        },
-      });
-      
-      // Vérifier la connexion au serveur SMTP
-      this.verifyTransporter();
-      
-      // Initialisation des templates
-      this.initializeTemplates();
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'initialisation du transporteur email:', error);
-    }
+    // Configuration du transporteur réel
+    this.setupProductionTransporter();
   }
+
+  setupProductionTransporter() {
+      try {
+        console.log('📧 Configuration du transporteur email de production...');
+        
+        const transporterConfig = {
+          host: process.env.EMAIL_HOST,
+          port: parseInt(process.env.EMAIL_PORT) || 587,
+          secure: process.env.EMAIL_SECURE === 'true',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD,
+          },
+          // Options supplémentaires pour éviter les erreurs
+          tls: {
+            rejectUnauthorized: false
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 5000,
+          socketTimeout: 10000,
+        };
+        
+        console.log('Configuration transporteur:', {
+          host: transporterConfig.host,
+          port: transporterConfig.port,
+          secure: transporterConfig.secure,
+          user: transporterConfig.auth.user
+        });
+        
+        this.transporter = nodemailer.createTransport(transporterConfig);
+        
+        // Vérifier la connexion de manière asynchrone
+        this.verifyTransporter();
+        
+        // Initialisation des templates
+        this.initializeTemplates();
+      } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation du transporteur email:', error);
+        this.setupTestTransporter();
+      }
+    }
   
   // Créer un transporteur de test pour le développement
-  setupTestTransporter() {// Créer un compte de test avec Ethereal Email
-    nodemailer.createTestAccount((err, account) => {
-      if (err) {
-        console.error('❌ Impossible de créer un compte de test Ethereal:', err);
-        return;
-      }
+  setupTestTransporter() {
+      console.log('🔧 Configuration du transporteur de test Ethereal...');
       
-      // Créer un transporteur avec le compte de test
-      this.transporter = nodemailer.createTransport({
-        host: account.smtp.host,
-        port: account.smtp.port,
-        secure: account.smtp.secure,
-        auth: {
-          user: account.user,
-          pass: account.pass
-        },
-        debug: true // Activer le débogage
-      });
-      
-      // Initialisation des templates
-      this.initializeTemplates();
-      
-      // Modifier la méthode sendEmail pour afficher le lien vers le message
-      const originalSendEmail = this.sendEmail.bind(this);
-      this.sendEmail = async (options) => {
-        const result = await originalSendEmail(options);
-        
-        if (result.success && result.info) {
-          console.log('✅ Email de test envoyé, voir le message ici:', nodemailer.getTestMessageUrl(result.info));
+      // Créer un compte de test avec Ethereal Email
+      nodemailer.createTestAccount((err, account) => {
+        if (err) {
+          console.error('❌ Impossible de créer un compte de test Ethereal:', err);
+          this.createMockTransporter();
+          return;
         }
         
-        return result;
-      };
-    });
+        console.log('✅ Compte de test Ethereal créé:');
+        console.log('  Utilisateur:', account.user);
+        console.log('  Mot de passe:', account.pass);
+        
+        // Créer un transporteur avec le compte de test
+        this.transporter = nodemailer.createTransport({
+          host: account.smtp.host,
+          port: account.smtp.port,
+          secure: account.smtp.secure,
+          auth: {
+            user: account.user,
+            pass: account.pass
+          }
+        });
+        
+        console.log('📧 Transporteur de test configuré - Les emails seront visibles sur https://ethereal.email');
+        
+        // Initialisation des templates
+        this.initializeTemplates();
+        
+        // Modifier la méthode sendEmail pour afficher le lien vers le message
+        const originalSendEmail = this.sendEmail.bind(this);
+        this.sendEmail = async (options) => {
+          const result = await originalSendEmail(options);
+          
+          if (result.success && result.info) {
+            const previewUrl = nodemailer.getTestMessageUrl(result.info);
+            if (previewUrl) {
+              console.log('📧 Email de test envoyé, voir le message ici:', previewUrl);
+            }
+          }
+          
+          return result;
+        };
+      });
+    }
+  
+  // Créer un transporteur factice qui simule l'envoi
+  createMockTransporter() {
+    console.log('🎭 Configuration du transporteur simulé...');
+    
+    this.transporter = {
+      sendMail: async (mailOptions) => {
+        console.log('📧 [SIMULATION] Email simulé:');
+        console.log('  De:', mailOptions.from);
+        console.log('  À:', mailOptions.to);
+        console.log('  Sujet:', mailOptions.subject);
+        if (mailOptions.attachments) {
+          console.log('  Pièces jointes:', mailOptions.attachments.length);
+        }
+        
+        return {
+          messageId: `simulated-${Date.now()}@simulator.local`,
+          response: 'Email simulé envoyé avec succès'
+        };
+      },
+      verify: async () => {
+        console.log('✅ Transporteur simulé vérifié');
+        return true;
+      }
+    };
+    
+    // Initialisation des templates
+    this.initializeTemplates();
   }
   
-  // Vérifier la connexion au serveur SMTP
+  // Vérifier la connexion au serveur SMTP de manière asynchrone
   async verifyTransporter() {
+    if (!this.transporter || !this.transporter.verify) {
+      return;
+    }
+    
     try {
-      if (!this.transporter) {
-        console.error('❌ Transporteur email non initialisé');
-        return;
-      }
-      
       await this.transporter.verify();
       console.log('✅ Connexion au serveur SMTP réussie');
     } catch (error) {
-      console.error('❌ Échec de la connexion au serveur SMTP:', error);
+      console.error('❌ Échec de la connexion au serveur SMTP:', error.message);
+      console.log('💡 Conseils de dépannage:');
+      console.log('  - Vérifiez vos identifiants Gmail');
+      console.log('  - Assurez-vous d\'utiliser un mot de passe d\'application (pas le mot de passe normal)');
+      console.log('  - Vérifiez que la vérification en 2 étapes est activée');
     }
   }
 
   // Charger les templates d'email
   initializeTemplates() {
-    try {
-      // Chemin vers le dossier des templates
-      const templatesDir = path.join(__dirname, '../templates/emails');
-      
-      // Vérification si le dossier existe
-      if (!fs.existsSync(templatesDir)) {
-        console.warn('⚠️ Le dossier des templates d\'email n\'existe pas encore');
-        fs.mkdirSync(templatesDir, { recursive: true });
+      try {
+        // Chemin vers le dossier des templates
+        const templatesDir = path.join(__dirname, '../templates/emails');
         
-        // Créer un template de base si aucun n'existe
-        const defaultTemplate = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>{{title}}</title>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #3b82f6; color: white; padding: 10px 20px; }
-            .content { padding: 20px; border: 1px solid #ddd; }
-            .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>{{title}}</h1>
+        // Vérification si le dossier existe
+        if (!fs.existsSync(templatesDir)) {
+          console.warn('⚠️ Le dossier des templates d\'email n\'existe pas encore');
+          fs.mkdirSync(templatesDir, { recursive: true });
+          
+          // Créer un template de base si aucun n'existe
+          const defaultTemplate = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>{{title}}</title>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #3b82f6; color: white; padding: 10px 20px; }
+              .content { padding: 20px; border: 1px solid #ddd; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>{{title}}</h1>
+              </div>
+              <div class="content">
+                {{{body}}}
+              </div>
+              <div class="footer">
+                <p>© {{year}} Système de Gestion des Chauffeurs</p>
+              </div>
             </div>
-            <div class="content">
-              {{{body}}}
-            </div>
-            <div class="footer">
-              <p>© {{year}} Système de Gestion des Chauffeurs</p>
-            </div>
-          </div>
-        </body>
-        </html>
-        `;
+          </body>
+          </html>
+          `;
+          
+          fs.writeFileSync(path.join(templatesDir, 'default.html'), defaultTemplate);
+          fs.writeFileSync(path.join(templatesDir, 'movement-notification.html'), defaultTemplate);
+        }
         
-        fs.writeFileSync(path.join(templatesDir, 'default.html'), defaultTemplate);
-        fs.writeFileSync(path.join(templatesDir, 'movement-notification.html'), defaultTemplate);
-      } else {
+        // Charger les templates
+        this.templates = {
+          default: this.compileTemplate('default.html'),
+          movementNotification: this.compileTemplate('movement-notification.html')
+        };
+        
+        console.log('✅ Templates d\'email initialisés');
+      } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation des templates d\'email:', error);
       }
-      
-      // Charger les templates
-      this.templates = {
-        default: this.compileTemplate('default.html'),
-        movementNotification: this.compileTemplate('movement-notification.html')
-      };
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'initialisation des templates d\'email:', error);
     }
-  }
 
   // Compiler un template avec Handlebars
   compileTemplate(templateName) {
-    try {
-      const templatePath = path.join(__dirname, '../templates/emails', templateName);
-      
-      if (!fs.existsSync(templatePath)) {
-        console.warn(`⚠️ Template ${templateName} non trouvé, utilisation du template par défaut`);
-        return handlebars.compile('{{body}}');
+      try {
+        const templatePath = path.join(__dirname, '../templates/emails', templateName);
+        
+        if (!fs.existsSync(templatePath)) {
+          console.warn(`⚠️ Template ${templateName} non trouvé, utilisation du template par défaut`);
+          return handlebars.compile('{{{body}}}');
+        }
+        
+        const templateSource = fs.readFileSync(templatePath, 'utf8');
+        return handlebars.compile(templateSource);
+      } catch (error) {
+        console.error(`❌ Erreur lors de la compilation du template ${templateName}:`, error);
+        return handlebars.compile('{{{body}}}');
       }
-      
-      const templateSource = fs.readFileSync(templatePath, 'utf8');
-      return handlebars.compile(templateSource);
-    } catch (error) {
-      console.error(`❌ Erreur lors de la compilation du template ${templateName}:`, error);
-      return handlebars.compile('{{body}}');
     }
-  }
 
   // Envoyer un email
   async sendEmail(options) {

@@ -1,20 +1,45 @@
-// server/server.js (mis à jour)
+// server/server.js (DÉBUT - chargement .env)
+
+// IMPORTANT: Charger dotenv EN PREMIER, avant tout autre import
+require('dotenv').config();
+
+// DÉBOGAGE: Vérifier le chargement des variables d'environnement
+console.log('🔍 Vérification du chargement des variables d\'environnement:');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'non défini');
+console.log('PORT:', process.env.PORT || 'non défini');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? '✓ Défini' : '✗ Manquant');
+console.log('EMAIL_HOST:', process.env.EMAIL_HOST ? '✓ Défini' : '✗ Manquant');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Défini' : '✗ Manquant');
+console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '✓ Défini' : '✗ Manquant');
+console.log('GOOGLE_MAPS_API_KEY:', process.env.GOOGLE_MAPS_API_KEY ? '✓ Défini' : '✗ Manquant');
+
+// Maintenant les autres imports
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const connectDB = require('./config/db.config');
 const errorHandler = require('./middleware/error.middleware');
 const { verifyToken } = require('./middleware/auth.middleware');
 const path = require('path');
 const fs = require('fs');
-const scheduler = require('./services/scheduler.service'); // Service mis à jour
+const scheduler = require('./services/scheduler.service');
 
 const proxyRoutes = require('./routes/proxy.routes');
 
-// Configuration et initialisation
-dotenv.config();
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 4000;
+
+// Afficher le chemin du répertoire de travail pour débogage
+console.log('📁 Répertoire de travail actuel:', process.cwd());
+console.log('📁 Chemin du fichier .env attendu:', path.join(process.cwd(), '.env'));
+
+// Vérifier si le fichier .env existe
+const envPath = path.join(process.cwd(), '.env');
+if (fs.existsSync(envPath)) {
+  console.log('✅ Fichier .env trouvé');
+} else {
+  console.error('❌ Fichier .env NON TROUVÉ à:', envPath);
+  console.log('💡 Assurez-vous que le fichier .env est dans le dossier server/');
+}
 
 // Connexion à la base de données
 connectDB().then(() => {
@@ -46,7 +71,7 @@ const uploadRoutes = require('./routes/upload.routes');
 const routes = [
   { path: '/api/auth', module: require('./routes/auth.routes') },
   { path: '/api/users', module: require('./routes/user.routes'), auth: true },
-  { path: '/api/timelogs', module: require('./routes/timelog.routes'), auth: true }, // Routes mises à jour
+  { path: '/api/timelogs', module: require('./routes/timelog.routes'), auth: true },
   { path: '/api/movements', module: require('./routes/movement.routes'), auth: true },
   { path: '/api/preparations', module: require('./routes/preparation.routes'), auth: true },
   { path: '/api/agencies', module: require('./routes/agency.routes'), auth: true },
@@ -69,8 +94,16 @@ app.get('/', (req, res) => {
   
   res.json({ 
     message: 'API de gestion des chauffeurs fonctionne correctement!',
-    s3Status: process.env.AWS_S3_BUCKET ? 'S3 configuré' : 'S3 non configuré',
-    emailStatus: process.env.EMAIL_HOST ? 'Email configuré' : 'Email non configuré',
+    environment: {
+      nodeEnv: process.env.NODE_ENV || 'development',
+      port: PORT
+    },
+    services: {
+      mongodb: process.env.MONGODB_URI ? 'configuré' : 'non configuré',
+      s3: process.env.AWS_S3_BUCKET ? 'configuré' : 'non configuré',
+      email: process.env.EMAIL_HOST ? 'configuré' : 'non configuré',
+      googleMaps: process.env.GOOGLE_MAPS_API_KEY ? 'configuré' : 'non configuré'
+    },
     schedulerStatus: {
       isRunning: schedulerStatus.isRunning,
       jobCount: schedulerStatus.jobCount,
@@ -97,16 +130,17 @@ app.get('/api/system/status', verifyToken, (req, res) => {
     server: {
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      version: process.version
+      version: process.version,
+      cwd: process.cwd()
     },
     scheduler: schedulerStatus,
     database: {
-      status: 'connected' // Simplification - pourrait être amélioré
+      status: 'connected'
     },
     services: {
       s3: process.env.AWS_S3_BUCKET ? 'configured' : 'not_configured',
       email: process.env.EMAIL_HOST ? 'configured' : 'not_configured',
-      whatsapp: 'initialized', // Simplification
+      whatsapp: 'initialized',
       googleMaps: process.env.GOOGLE_MAPS_API_KEY ? 'configured' : 'not_configured'
     }
   });

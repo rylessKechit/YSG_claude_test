@@ -118,11 +118,54 @@ router.get('/driver-analysis/:userId?', verifyToken, async (req, res) => {
   try {
     const userId = req.params.userId || req.user._id;
     
-    // Vérifier les permissions
-    if (userId !== req.user._id.toString() && 
+    // CORRECTION: Convertir l'ObjectId en string pour la comparaison
+    const requestedUserId = userId.toString();
+    const currentUserId = req.user._id.toString();
+    
+    // Vérifier les permissions - permettre à l'utilisateur de voir ses propres données
+    if (requestedUserId !== currentUserId && 
         !['admin', 'team-leader', 'direction'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Permission refusée' });
     }
+    
+    const { date } = req.query;
+    let startDate, endDate;
+    
+    if (date) {
+      startDate = new Date(date + 'T00:00:00');
+      endDate = new Date(date + 'T23:59:59');
+    } else {
+      // Par défaut, prendre aujourd'hui
+      const today = new Date();
+      startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+    }
+    
+    // Récupérer les pointages du driver pour la date
+    const timelogs = await TimeLog.find({
+      userId: requestedUserId,
+      createdAt: { $gte: startDate, $lte: endDate }
+    }).sort({ createdAt: 1 });
+    
+    // Analyser les pointages
+    const analysis = analyzeDriverTimelogs(timelogs);
+    
+    res.json({
+      date: startDate.toISOString().split('T')[0],
+      timelogs,
+      analysis
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse des pointages:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// ROUTE ALTERNATIVE sans paramètre userId (pour éviter les conflits)
+router.get('/my-analysis', verifyToken, async (req, res) => {
+  try {
+    // Toujours utiliser l'ID de l'utilisateur connecté
+    const userId = req.user._id.toString();
     
     const { date } = req.query;
     let startDate, endDate;
