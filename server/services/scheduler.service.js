@@ -7,20 +7,24 @@ const errorHandler = require('./middleware/error.middleware');
 const { verifyToken } = require('./middleware/auth.middleware');
 const path = require('path');
 const fs = require('fs');
+const scheduler = require('./services/scheduler.service');
 
 const proxyRoutes = require('./routes/proxy.routes');
 
 // Configuration et initialisation
 dotenv.config();
-
-const setupScheduledJobs = require('./scheduler');
 const app = express();
 const PORT = process.env.PORT;
 
 // Connexion à la base de données
 connectDB().then(() => {
-  setupScheduledJobs();
+  // Initialize WhatsApp service
   require('./services/whatsapp.service');
+  
+  // Initialize the scheduler service
+  scheduler.initialize();
+  
+  console.log('✅ All services initialized successfully');
 }).catch(err => {
   console.error('Erreur de connexion à MongoDB:', err);
 });
@@ -64,12 +68,26 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'API de gestion des chauffeurs fonctionne correctement!',
     s3Status: process.env.AWS_S3_BUCKET ? 'S3 configuré' : 'S3 non configuré',
-    emailStatus: process.env.EMAIL_HOST ? 'Email configuré' : 'Email non configuré'
+    emailStatus: process.env.EMAIL_HOST ? 'Email configuré' : 'Email non configuré',
+    schedulerStatus: scheduler.isRunning ? 'Scheduler activé' : 'Scheduler désactivé'
   });
 });
 
 // Middleware de gestion des erreurs
 app.use(errorHandler);
+
+// Clean shutdown
+process.on('SIGINT', () => {
+  console.log('Shutting down server gracefully...');
+  scheduler.shutdown();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Shutting down server gracefully...');
+  scheduler.shutdown();
+  process.exit(0);
+});
 
 // Démarrage du serveur
 app.listen(PORT, () => {

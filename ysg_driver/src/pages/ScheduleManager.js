@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import scheduleService from '../services/scheduleService';
+import agencyService from '../services/agencyService'; // Importer le service des agences
 import Navigation from '../components/Navigation';
 import ScheduleForm from '../components/schedule/ScheduleForm';
 import ScheduleTable from '../components/schedule/ScheduleTable';
@@ -14,6 +15,7 @@ import '../styles/ScheduleManager.css';
 const ScheduleManager = () => {
   const [preparators, setPreparators] = useState([]);
   const [scheduleData, setScheduleData] = useState([]);
+  const [agencies, setAgencies] = useState([]); // Nouvel état pour les agences
   const [formData, setFormData] = useState({
     userId: '',
     day: 'monday',
@@ -21,7 +23,7 @@ const ScheduleManager = () => {
     startTime: '09:00',
     endTime: '17:00',
     tasks: '',
-    location: ''
+    location: '' // Sera remplacé par l'ID de l'agence sélectionnée
   });
   const [editMode, setEditMode] = useState(false);
   const [currentEntryId, setCurrentEntryId] = useState(null);
@@ -91,6 +93,10 @@ const ScheduleManager = () => {
         // Charger les préparateurs
         const preparatorsData = await scheduleService.getPreparators();
         setPreparators(preparatorsData);
+        
+        // Charger toutes les agences - Utiliser getAgencies() au lieu de getAllAgencies()
+        const agenciesData = await agencyService.getAgencies(false); // false pour obtenir toutes les agences, pas seulement les actives
+        setAgencies(agenciesData);
         
         // Charger tous les plannings
         const schedulesData = await scheduleService.getAllSchedules();
@@ -245,6 +251,7 @@ const ScheduleManager = () => {
               formData={formData}
               editMode={editMode}
               preparators={preparators}
+              agencies={agencies} // Passer les agences au formulaire
               days={days}
               onChange={handleChange}
               onSubmit={handleSubmit}
@@ -258,6 +265,7 @@ const ScheduleManager = () => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onAddEntry={handleAddEntry}
+              agencies={agencies} // Passer les agences au tableau pour afficher les noms
             />
           </div>
         )}

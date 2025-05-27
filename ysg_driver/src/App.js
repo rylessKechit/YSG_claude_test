@@ -1,4 +1,4 @@
-// src/App.js
+// src/App.js (with AutoTimelogAdmin added)
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -33,8 +33,9 @@ const DriverPerformance = lazy(() => import('./pages/DriverPerformance'));
 const LocationSettings = lazy(() => import('./pages/LocationSettings'));
 const DriverTrackingMap = lazy(() => import('./pages/DriverTrackingMap'));
 const TrainingPage = lazy(() => import('./pages/TrainingPage'));
-// Ajout de la nouvelle page de gestion des agences
 const AgencyManagement = lazy(() => import('./pages/AgencyManagement'));
+// New auto-timelog admin page
+const AutoTimelogAdmin = lazy(() => import('./pages/AutoTimelogAdmin'));
 
 // Composant de route protégée
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
@@ -84,7 +85,10 @@ const routes = [
   { path: '/admin/location', element: <LocationSettings />, protected: true, roles: ['admin'] },
   { path: '/tracking', element: <DriverTrackingMap />, protected: true, roles: ['admin', 'team-leader'] },
   
-  // Nouvelle route pour la gestion des agences
+  // New auto-timelog admin route
+  { path: '/admin/auto-timelog', element: <AutoTimelogAdmin />, protected: true, roles: ['admin'] },
+  
+  // Route pour la gestion des agences
   { path: '/admin/agencies', element: <AgencyManagement />, protected: true, roles: ['admin', 'team-leader'] },
   
   // Routes Rapports (Admin et Direction)

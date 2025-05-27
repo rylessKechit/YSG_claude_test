@@ -2,8 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const TimeLog = require('../models/timelog.model');
-const { verifyToken, canAccessReports } = require('../middleware/auth.middleware');
+const { verifyToken, canAccessReports, isAdmin } = require('../middleware/auth.middleware');
 const { verifyLocationAndIP } = require('../middleware/location.middleware');
+const autoTimelogService = require('../services/autoTimelog.service');
 
 // Route pour démarrer un pointage
 router.post('/', verifyToken, verifyLocationAndIP, async (req, res) => {
@@ -93,6 +94,26 @@ router.post('/end', verifyToken, verifyLocationAndIP, async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la fin du pointage:', error);
     res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.post('/auto-cleanup', verifyToken, isAdmin, async (req, res) => {
+  try {
+    console.log(`🔄 Manual trigger of auto-timelog cleanup by admin ${req.user._id}`);
+    
+    // Execute the service
+    await autoTimelogService.endOrphanedServices();
+    
+    res.json({ 
+      message: 'Automatic timelog cleanup completed successfully',
+      success: true
+    });
+  } catch (error) {
+    console.error('❌ Error during manual auto-timelog cleanup:', error);
+    res.status(500).json({ 
+      message: 'Error during automatic timelog cleanup',
+      error: error.message
+    });
   }
 });
 

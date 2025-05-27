@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import scheduleService from '../services/scheduleService';
 import timelogService from '../services/timelogService';
+import movementService from '../services/movementService';
+import preparationService from '../services/preparationService';
 import '../styles/WeeklySchedule.css';
 
 const WeeklySchedule = () => {
@@ -12,6 +14,7 @@ const WeeklySchedule = () => {
   const [error, setError] = useState(null);
   const [expandedDay, setExpandedDay] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [autoEndPrediction, setAutoEndPrediction] = useState(null);
   const { currentUser } = useAuth();
   
   const days = [
@@ -127,6 +130,55 @@ const WeeklySchedule = () => {
     }
   };
 
+  // Nouvelle fonction: Calculer l'heure de fin automatique prévue
+  const calculateAutoEndTime = async (activeTimelog) => {
+    try {
+      if (!activeTimelog || !currentUser) return null;
+      
+      // Logique différente selon le rôle de l'utilisateur
+      if (['driver', 'team-leader'].includes(currentUser.role)) {
+        // Pour les chauffeurs et chefs d'équipe, vérifier leur dernier mouvement terminé
+        const completedMovements = await movementService.getCompletedMovements(1, 1);
+        
+        if (completedMovements?.movements?.length > 0) {
+          const lastMovement = completedMovements.movements[0];
+          const lastMovementTime = new Date(lastMovement.arrivalTime || lastMovement.updatedAt);
+          
+          // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+          const predictedEndTime = new Date(lastMovementTime.getTime() + 15 * 60000);
+          
+          return {
+            predictedTime: predictedEndTime,
+            basedOn: 'dernier mouvement',
+            activityTime: lastMovementTime
+          };
+        }
+      } else if (currentUser.role === 'preparator') {
+        // Pour les préparateurs, vérifier leur dernière préparation terminée
+        const completedPreparations = await preparationService.getPreparations(1, 1, 'completed');
+        
+        if (completedPreparations?.preparations?.length > 0) {
+          const lastPreparation = completedPreparations.preparations[0];
+          const lastPreparationTime = new Date(lastPreparation.endTime || lastPreparation.updatedAt);
+          
+          // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+          const predictedEndTime = new Date(lastPreparationTime.getTime() + 15 * 60000);
+          
+          return {
+            predictedTime: predictedEndTime,
+            basedOn: 'dernière préparation',
+            activityTime: lastPreparationTime
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Erreur lors du calcul de l\'heure de fin automatique:', error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       if (!currentUser) return;
@@ -141,6 +193,15 @@ const WeeklySchedule = () => {
         // Charger les pointages
         const timelogsData = await timelogService.getTimeLogs(1, 50);
         setTimelogs(timelogsData.timeLogs || []);
+        
+        // Vérifier s'il y a un pointage actif et calculer l'heure de fin automatique prévue
+        const activeTimelog = timelogsData.timeLogs?.find(log => log.status === 'active');
+        if (activeTimelog) {
+          const prediction = await calculateAutoEndTime(activeTimelog);
+          setAutoEndPrediction(prediction);
+        } else {
+          setAutoEndPrediction(null);
+        }
         
         setLoading(false);
       } catch (err) {
@@ -238,6 +299,17 @@ const WeeklySchedule = () => {
                           {formatTime(timelog.startTime)}
                           {timelog.endTime ? ` - ${formatTime(timelog.endTime)}` : ' (en cours)'}
                         </span>
+                        
+                        {/* Afficher la prédiction de fin automatique pour les pointages actifs */}
+                        {timelog.status === 'active' && autoEndPrediction && (
+                          <div className="auto-end-prediction">
+                            <i className="fas fa-stopwatch"></i>
+                            <span>Fin auto: {autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="prediction-info">
+                              (15min après {autoEndPrediction.basedOn})
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -342,51 +414,73 @@ const WeeklySchedule = () => {
                         <div className="detail-value timelogs-list">
                           {dayTimelogs.map((timelog, idx) => (
                             <div key={timelog._id || idx} className={`timelog-entry ${timelog.status}`}>
-                            <i className={`fas ${timelog.status === 'active' ? 'fa-play-circle' : 'fa-check-circle'}`}></i>
-                            <span>
-                              {formatTime(timelog.startTime)}
-                              {timelog.endTime ? ` - ${formatTime(timelog.endTime)}` : ' (en cours)'}
-                            </span>
-                          </div>
-                        ))}
+                              <i className={`fas ${timelog.status === 'active' ? 'fa-play-circle' : 'fa-check-circle'}`}></i>
+                              <span>
+                                {formatTime(timelog.startTime)}
+                                {timelog.endTime ? ` - ${formatTime(timelog.endTime)}` : ' (en cours)'}
+                              </span>
+                              
+                              {/* Afficher la prédiction de fin automatique pour les pointages actifs */}
+                              {isToday && timelog.status === 'active' && autoEndPrediction && (
+                                <div className="auto-end-prediction">
+                                  <i className="fas fa-stopwatch"></i>
+                                  <span>Fin automatique prévue: {autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                  <div className="prediction-info">
+                                    (15 minutes après votre {autoEndPrediction.basedOn})
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
               
-              {isExpanded && !entry && (
-                <div className="mobile-day-details empty">
-                  <p>Pas d'horaire défini pour ce jour</p>
-                  
-                  {/* Affichage des pointages même sans planning */}
-                  {dayTimelogs.length > 0 && (
-                    <div className="detail-item timelog-detail">
-                      <div className="detail-label">
-                        <i className="fas fa-user-clock"></i> Pointages:
+                {isExpanded && !entry && (
+                  <div className="mobile-day-details empty">
+                    <p>Pas d'horaire défini pour ce jour</p>
+                    
+                    {/* Affichage des pointages même sans planning */}
+                    {dayTimelogs.length > 0 && (
+                      <div className="detail-item timelog-detail">
+                        <div className="detail-label">
+                          <i className="fas fa-user-clock"></i> Pointages:
+                        </div>
+                        <div className="detail-value timelogs-list">
+                          {dayTimelogs.map((timelog, idx) => (
+                            <div key={timelog._id || idx} className={`timelog-entry ${timelog.status}`}>
+                              <i className={`fas ${timelog.status === 'active' ? 'fa-play-circle' : 'fa-check-circle'}`}></i>
+                              <span>
+                                {formatTime(timelog.startTime)}
+                                {timelog.endTime ? ` - ${formatTime(timelog.endTime)}` : ' (en cours)'}
+                              </span>
+                              
+                              {/* Afficher la prédiction de fin automatique pour les pointages actifs */}
+                              {isToday && timelog.status === 'active' && autoEndPrediction && (
+                                <div className="auto-end-prediction">
+                                  <i className="fas fa-stopwatch"></i>
+                                  <span>Fin automatique prévue: {autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                  <div className="prediction-info">
+                                    (15 minutes après votre {autoEndPrediction.basedOn})
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="detail-value timelogs-list">
-                        {dayTimelogs.map((timelog, idx) => (
-                          <div key={timelog._id || idx} className={`timelog-entry ${timelog.status}`}>
-                            <i className={`fas ${timelog.status === 'active' ? 'fa-play-circle' : 'fa-check-circle'}`}></i>
-                            <span>
-                              {formatTime(timelog.startTime)}
-                              {timelog.endTime ? ` - ${formatTime(timelog.endTime)}` : ' (en cours)'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-);
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default WeeklySchedule;

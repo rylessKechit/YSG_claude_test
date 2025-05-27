@@ -5,6 +5,7 @@ const ScheduleForm = ({
   formData,
   editMode,
   preparators,
+  agencies, // Nouvelle prop pour les agences
   days,
   onChange,
   onSubmit,
@@ -107,16 +108,22 @@ const ScheduleForm = ({
             
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="location" className="form-label">Lieu</label>
-                <input
-                  type="text"
+                <label htmlFor="location" className="form-label">Agence / Lieu de travail</label>
+                {/* Remplacer l'input texte par un select d'agences */}
+                <select
                   id="location"
                   name="location"
                   value={formData.location}
                   onChange={onChange}
-                  className="form-input"
-                  placeholder="Ex: Atelier nord"
-                />
+                  className="form-select"
+                >
+                  <option value="">Sélectionner une agence</option>
+                  {agencies && agencies.map(agency => (
+                    <option key={agency._id} value={agency.name}>
+                      {agency.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             

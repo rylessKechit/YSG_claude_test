@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import timelogService from '../services/timelogService';
+import movementService from '../services/movementService';
+import preparationService from '../services/preparationService';
 import Navigation from '../components/Navigation';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
@@ -18,8 +20,56 @@ const TimeLog = () => {
   const [locationError, setLocationError] = useState(null);
   const [locationStatus, setLocationStatus] = useState(null);
   const [refreshInterval, setRefreshInterval] = useState(null);
+  const [autoEndPrediction, setAutoEndPrediction] = useState(null);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Calcul de l'heure de fin automatique prévue
+  const calculateAutoEndTime = async () => {
+    try {
+      if (!currentUser) return null;
+      
+      // Logique différente selon le rôle de l'utilisateur
+      if (['driver', 'team-leader'].includes(currentUser.role)) {
+        // Pour les chauffeurs et chefs d'équipe, vérifier leur dernier mouvement terminé
+        const lastMovement = await movementService.getLatestCompletedMovement();
+        
+        if (lastMovement) {
+          const lastMovementTime = new Date(lastMovement.arrivalTime || lastMovement.updatedAt);
+          
+          // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+          const predictedEndTime = new Date(lastMovementTime.getTime() + 15 * 60000);
+          
+          return {
+            predictedTime: predictedEndTime,
+            basedOn: 'dernier mouvement',
+            activityTime: lastMovementTime
+          };
+        }
+      } else if (currentUser.role === 'preparator') {
+        // Pour les préparateurs, vérifier leur dernière préparation terminée
+        const lastPreparation = await preparationService.getLatestCompletedPreparation();
+        
+        if (lastPreparation) {
+          const lastPreparationTime = new Date(lastPreparation.endTime || lastPreparation.updatedAt);
+          
+          // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+          const predictedEndTime = new Date(lastPreparationTime.getTime() + 15 * 60000);
+          
+          return {
+            predictedTime: predictedEndTime,
+            basedOn: 'dernière préparation',
+            activityTime: lastPreparationTime
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Erreur lors du calcul de l\'heure de fin automatique:', error);
+      return null;
+    }
+  };
 
   // Vérifier le pointage actif au chargement
   useEffect(() => {
@@ -28,6 +78,18 @@ const TimeLog = () => {
         setLoading(true);
         const timeLog = await timelogService.getActiveTimeLog();
         setActiveTimeLog(timeLog);
+        
+        // Vérification du pointage actif et calcul de fin auto - utilisation d'une IIFE asynchrone
+        if (timeLog) {
+          // Fonction auto-invoquée asynchrone pour permettre d'utiliser await
+          (async () => {
+            const prediction = await calculateAutoEndTime();
+            setAutoEndPrediction(prediction);
+          })();
+        } else {
+          setAutoEndPrediction(null);
+        }
+        
         setLoading(false);
       } catch (err) {
         if (err.response?.status === 404) {
@@ -122,6 +184,11 @@ const TimeLog = () => {
       setActiveTimeLog(response.timeLog);
       setNotes('');
       setSuccess('Pointage démarré avec succès');
+      
+      // Calculer la prédiction de fin automatique
+      const prediction = await calculateAutoEndTime();
+      setAutoEndPrediction(prediction);
+      
       setTimeout(() => setSuccess(null), 3000);
       
       setLoading(false);
@@ -164,6 +231,7 @@ const TimeLog = () => {
       await timelogService.endTimeLog({ latitude, longitude, notes });
       
       setActiveTimeLog(null);
+      setAutoEndPrediction(null);
       setNotes('');
       setSuccess('Pointage terminé avec succès');
       setTimeout(() => setSuccess(null), 3000);
@@ -276,6 +344,25 @@ const TimeLog = () => {
               </div>
             )}
           </div>
+          
+          {/* Affichage de la prédiction de fin automatique */}
+          {activeTimeLog && autoEndPrediction && (
+            <div className="auto-end-notification">
+              <div className="notification-icon">
+                <i className="fas fa-stopwatch"></i>
+              </div>
+              <div className="notification-content">
+                <div className="notification-title">Fin de service automatique</div>
+                <div className="notification-message">
+                  Votre service sera automatiquement terminé à <strong>{autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</strong>{' '}
+                  (15 minutes après votre {autoEndPrediction.basedOn}).
+                </div>
+                <div className="notification-tip">
+                  Si vous souhaitez continuer votre service, effectuez une nouvelle activité ou terminez manuellement votre service.
+                </div>
+              </div>
+            </div>
+          )}
           
           <div className="notes-section">
             <label htmlFor="notes" className="notes-label">Notes</label>

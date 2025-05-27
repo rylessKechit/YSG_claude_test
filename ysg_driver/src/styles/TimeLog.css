@@ -357,3 +357,67 @@
       justify-content: center;
     }
   }
+
+  /* Add these styles to src/styles/TimeLog.css */
+
+.auto-end-notification {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-left: 4px solid #f59e0b;
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.notification-icon {
+  font-size: 1.5rem;
+  color: #f59e0b;
+  display: flex;
+  align-items: flex-start;
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-title {
+  font-weight: 600;
+  color: #b45309;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.notification-message {
+  color: #92400e;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.notification-tip {
+  font-size: 0.875rem;
+  color: #92400e;
+  font-style: italic;
+}
+
+@keyframes pulse-notification {
+  0% { opacity: 0.95; }
+  50% { opacity: 1; }
+  100% { opacity: 0.95; }
+}
+
+.auto-end-notification {
+  animation: pulse-notification 3s infinite;
+}
+
+@media (max-width: 640px) {
+  .auto-end-notification {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.875rem;
+  }
+  
+  .notification-icon {
+    font-size: 1.25rem;
+  }
+}
