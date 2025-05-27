@@ -1,4 +1,4 @@
-// ysg_driver/src/services/timelogService.js (mis à jour)
+// ysg_driver/src/services/timelogService.js (CORRIGÉ)
 import { api, fetchWithCache, invalidateCache } from './authService';
 import { ENDPOINTS } from '../config';
 
@@ -26,7 +26,7 @@ const timelogService = {
     }
   },
 
-  // NOUVEAU: Démarrer un pointage avec type spécifique pour drivers
+  // CORRIGÉ: Démarrer un pointage avec type spécifique pour drivers
   startDriverTimeLog: async (type, locationData, notes = '') => {
     try {
       const data = {
@@ -79,37 +79,44 @@ const timelogService = {
     }
   },
 
-  // NOUVEAU: Analyser les pointages d'un driver pour une date
+  // CORRIGÉ: Analyser les pointages d'un driver pour une date
   analyzeDriverTimelogs: async (userId = null, date = null) => {
     try {
-      let url = `/api/timelogs/driver-analysis`;
+      // Construire l'URL correctement
+      let url = `${ENDPOINTS.TIMELOGS.BASE}/driver-analysis`;
       
       if (userId) {
         url += `/${userId}`;
       }
       
+      const params = new URLSearchParams();
       if (date) {
-        url += `?date=${date}`;
+        params.append('date', date);
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
       }
       
       const response = await api.get(url);
       return response.data;
     } catch (error) {
+      console.error('Erreur lors de l\'analyse des pointages:', error);
       throw error;
     }
   },
 
-  // NOUVEAU: Déclencher le traitement automatique (admin seulement)
+  // Déclencher le traitement automatique (admin seulement)
   triggerDriverAutomation: async () => {
     try {
-      const response = await api.post('/api/timelogs/auto-process-drivers');
+      const response = await api.post(`${ENDPOINTS.TIMELOGS.BASE}/auto-process-drivers`);
       return response.data;
     } catch (error) {
       throw error;
     }
   },
 
-  // NOUVEAU: Obtenir les types de pointages valides pour un driver
+  // Obtenir les types de pointages valides pour un driver
   getValidTimelogTypes: (currentTypes = []) => {
     const allTypes = [
       { value: 'start_service', label: '🟢 Début de service', description: 'Commencer votre journée de travail' },
@@ -141,14 +148,14 @@ const timelogService = {
     return { allTypes, available };
   },
 
-  // NOUVEAU: Valider si un type de pointage est permis
+  // Valider si un type de pointage est permis
   validateTimelogType: async (type) => {
     try {
       // Obtenir les pointages d'aujourd'hui
       const today = new Date().toISOString().split('T')[0];
       const analysis = await timelogService.analyzeDriverTimelogs(null, today);
       
-      const existingTypes = analysis.sequence.map(s => s.type);
+      const existingTypes = analysis.analysis.sequence.map(s => s.type);
       
       // Utiliser la même logique que le backend
       switch (type) {
@@ -199,7 +206,7 @@ const timelogService = {
     }
   },
 
-  // NOUVEAU: Obtenir le résumé de la journée d'un driver
+  // Obtenir le résumé de la journée d'un driver
   getDailySummary: async (date = null) => {
     try {
       const targetDate = date || new Date().toISOString().split('T')[0];
@@ -219,7 +226,7 @@ const timelogService = {
     }
   },
 
-  // NOUVEAU: Déterminer la prochaine action recommandée
+  // Déterminer la prochaine action recommandée
   getNextAction: (analysis) => {
     if (!analysis.hasServiceStart) {
       return { type: 'start_service', label: 'Commencer votre service', urgent: false };
@@ -240,7 +247,7 @@ const timelogService = {
     return { type: null, label: 'Journée complète', urgent: false };
   },
 
-  // NOUVEAU: Calculer le pourcentage de progression
+  // Calculer le pourcentage de progression
   calculateProgress: (analysis) => {
     const totalSteps = 4;
     let completedSteps = 0;
@@ -253,7 +260,7 @@ const timelogService = {
     return Math.round((completedSteps / totalSteps) * 100);
   },
 
-  // NOUVEAU: Formater la durée entre deux pointages
+  // Formater la durée entre deux pointages
   formatDuration: (startTime, endTime = null) => {
     const start = new Date(startTime);
     const end = endTime ? new Date(endTime) : new Date();

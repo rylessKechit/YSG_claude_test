@@ -1,10 +1,9 @@
-// server/routes/timelog.routes.js (mis à jour avec les nouveaux types)
+// server/routes/timelog.routes.js (CORRIGÉ - routes manquantes ajoutées)
 const express = require('express');
 const router = express.Router();
 const TimeLog = require('../models/timelog.model');
 const { verifyToken, canAccessReports, isAdmin } = require('../middleware/auth.middleware');
 const { verifyLocationAndIP } = require('../middleware/location.middleware');
-const driverTimelogAutomationService = require('../services/driverTimelogAutomation.service');
 
 // Route pour démarrer un pointage avec type spécifique
 router.post('/', verifyToken, verifyLocationAndIP, async (req, res) => {
@@ -60,11 +59,7 @@ router.post('/', verifyToken, verifyLocationAndIP, async (req, res) => {
       notes
     };
 
-    // Ne pas inclure autoGenerationReason pour les pointages manuels
-    // (laisser Mongoose utiliser la valeur par défaut)
-    
     const timeLog = new TimeLog(timeLogData);
-    
     await timeLog.save();
     
     res.status(201).json({
@@ -80,7 +75,6 @@ router.post('/', verifyToken, verifyLocationAndIP, async (req, res) => {
 // Route pour terminer un pointage
 router.post('/end', verifyToken, verifyLocationAndIP, async (req, res) => {
   try {
-    // Trouver le pointage actif
     const activeTimeLog = await TimeLog.findOne({ 
       userId: req.user._id, 
       status: 'active' 
@@ -90,7 +84,6 @@ router.post('/end', verifyToken, verifyLocationAndIP, async (req, res) => {
       return res.status(404).json({ message: 'Aucun pointage actif trouvé' });
     }
     
-    // Mettre à jour avec les données de fin
     const { latitude, longitude, notes } = req.body;
     
     activeTimeLog.endTime = new Date();
@@ -120,29 +113,7 @@ router.post('/end', verifyToken, verifyLocationAndIP, async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE: Déclencher manuellement le traitement automatique (admin seulement)
-router.post('/auto-process-drivers', verifyToken, isAdmin, async (req, res) => {
-  try {
-    console.log(`🔄 Déclenchement manuel du traitement des pointages drivers par l'admin ${req.user._id}`);
-    
-    const schedulerService = require('../services/scheduler.service');
-    const result = await schedulerService.runDriverTimelogProcessingNow();
-    
-    res.json({ 
-      message: 'Traitement automatique des pointages drivers terminé avec succès',
-      success: true,
-      result
-    });
-  } catch (error) {
-    console.error('❌ Erreur lors du traitement manuel des pointages drivers:', error);
-    res.status(500).json({ 
-      message: 'Erreur lors du traitement automatique des pointages drivers',
-      error: error.message
-    });
-  }
-});
-
-// NOUVELLE ROUTE: Obtenir les pointages d'un driver avec types (pour analyse)
+// ROUTE MANQUANTE AJOUTÉE: Obtenir les pointages d'un driver avec types (pour analyse)
 router.get('/driver-analysis/:userId?', verifyToken, async (req, res) => {
   try {
     const userId = req.params.userId || req.user._id;
@@ -186,6 +157,58 @@ router.get('/driver-analysis/:userId?', verifyToken, async (req, res) => {
   }
 });
 
+// ROUTE MANQUANTE AJOUTÉE: Déclencher manuellement le traitement automatique (admin seulement)
+router.post('/auto-process-drivers', verifyToken, isAdmin, async (req, res) => {
+  try {
+    console.log(`🔄 Déclenchement manuel du traitement des pointages drivers par l'admin ${req.user._id}`);
+    
+    const schedulerService = require('../services/scheduler.service');
+    const result = await schedulerService.runDriverTimelogProcessingNow();
+    
+    res.json({ 
+      message: 'Traitement automatique des pointages drivers terminé avec succès',
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors du traitement manuel des pointages drivers:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors du traitement automatique des pointages drivers',
+      error: error.message
+    });
+  }
+});
+
+// ROUTE MANQUANTE AJOUTÉE: Obtenir le statut des utilisateurs avec pointages actifs
+router.get('/users/status', verifyToken, isAdmin, async (req, res) => {
+  try {
+    // Récupérer tous les pointages actifs avec les informations utilisateur
+    const activeTimelogs = await TimeLog.find({ status: 'active' })
+      .populate('userId', 'username fullName email phone role')
+      .sort({ startTime: -1 });
+    
+    // Formater les données pour la réponse
+    const usersStatus = activeTimelogs.map(timelog => ({
+      _id: timelog.userId._id,
+      username: timelog.userId.username,
+      fullName: timelog.userId.fullName,
+      email: timelog.userId.email,
+      phone: timelog.userId.phone,
+      role: timelog.userId.role,
+      status: timelog.status,
+      startTime: timelog.startTime,
+      type: timelog.type,
+      location: timelog.location,
+      notes: timelog.notes
+    }));
+    
+    res.json(usersStatus);
+  } catch (error) {
+    console.error('Erreur lors de la récupération du statut des utilisateurs:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Route pour récupérer le pointage actif
 router.get('/active', verifyToken, async (req, res) => {
   try {
@@ -205,7 +228,7 @@ router.get('/active', verifyToken, async (req, res) => {
   }
 });
 
-// Route pour obtenir l'historique des pointages (mise à jour pour inclure les types)
+// Route pour obtenir l'historique des pointages
 router.get('/', verifyToken, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -243,7 +266,7 @@ router.get('/', verifyToken, async (req, res) => {
       query.status = status;
     }
     
-    // NOUVEAU: Filtrage par type de pointage
+    // Filtrage par type de pointage
     if (type) {
       query.type = type;
     }
@@ -274,9 +297,6 @@ router.get('/', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
-
-// Toutes les autres routes existantes restent inchangées...
-// (obtenir pointages d'un jour, résumé, statuts utilisateurs, etc.)
 
 /**
  * Valide la séquence des pointages pour un driver

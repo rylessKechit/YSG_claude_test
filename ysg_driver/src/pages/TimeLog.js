@@ -1,8 +1,10 @@
-// ysg_driver/src/pages/TimeLog.js (VERSION INTELLIGENTE)
+// ysg_driver/src/pages/TimeLog.js (CORRIGÉ - appels API fixes)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import timelogService from '../services/timelogService';
+import movementService from '../services/movementService';
+import preparationService from '../services/preparationService';
 import Navigation from '../components/Navigation';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
@@ -85,6 +87,65 @@ const TimeLog = () => {
       if (refreshInterval) clearInterval(refreshInterval);
     };
   }, []);
+
+  // CORRIGÉ: Calculer l'heure de fin automatique prévue
+  const calculateAutoEndTime = async (activeTimelog) => {
+    try {
+      if (!activeTimelog || !currentUser) return null;
+      
+      // Logique différente selon le rôle de l'utilisateur
+      if (['driver', 'team-leader'].includes(currentUser.role)) {
+        // Pour les chauffeurs et chefs d'équipe, vérifier leur dernier mouvement terminé
+        try {
+          // CORRIGÉ: Utiliser getMovements au lieu de getCompletedMovements
+          const movementsResponse = await movementService.getMovements(1, 1, 'completed');
+          
+          if (movementsResponse?.movements?.length > 0) {
+            const lastMovement = movementsResponse.movements[0];
+            const lastMovementTime = new Date(lastMovement.arrivalTime || lastMovement.updatedAt);
+            
+            // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+            const predictedEndTime = new Date(lastMovementTime.getTime() + 15 * 60000);
+            
+            return {
+              predictedTime: predictedEndTime,
+              basedOn: 'dernier mouvement',
+              activityTime: lastMovementTime
+            };
+          }
+        } catch (movementError) {
+          console.error('Erreur lors de la récupération des mouvements:', movementError);
+        }
+      } else if (currentUser.role === 'preparator') {
+        // Pour les préparateurs, vérifier leur dernière préparation terminée
+        try {
+          // CORRIGÉ: Utiliser getPreparations avec les bons paramètres
+          const preparationsResponse = await preparationService.getPreparations(1, 1, 'completed');
+          
+          if (preparationsResponse?.preparations?.length > 0) {
+            const lastPreparation = preparationsResponse.preparations[0];
+            const lastPreparationTime = new Date(lastPreparation.endTime || lastPreparation.updatedAt);
+            
+            // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
+            const predictedEndTime = new Date(lastPreparationTime.getTime() + 15 * 60000);
+            
+            return {
+              predictedTime: predictedEndTime,
+              basedOn: 'dernière préparation',
+              activityTime: lastPreparationTime
+            };
+          }
+        } catch (preparationError) {
+          console.error('Erreur lors de la récupération des préparations:', preparationError);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Erreur lors du calcul de l\'heure de fin automatique:', error);
+      return null;
+    }
+  };
 
   // Analyser les pointages du jour et déterminer la prochaine action
   const analyzeCurrentDay = async () => {
@@ -203,6 +264,15 @@ const TimeLog = () => {
         // Analyser la journée actuelle (seulement pour les drivers)
         if (currentUser && currentUser.role === 'driver') {
           await analyzeCurrentDay();
+          
+          // Calculer l'heure de fin automatique prévue si pointage actif
+          if (timeLog) {
+            const prediction = await calculateAutoEndTime(timeLog);
+            // Stocker la prédiction pour l'affichage
+            if (prediction) {
+              setAutoEndPrediction(prediction);
+            }
+          }
         }
         
         setLoading(false);
@@ -217,6 +287,9 @@ const TimeLog = () => {
       initializeTimeLog();
     }
   }, [currentUser]);
+
+  // État pour la prédiction de fin automatique
+  const [autoEndPrediction, setAutoEndPrediction] = useState(null);
 
   // Démarrer un pointage intelligent
   const startSmartTimeLog = async () => {
@@ -290,6 +363,7 @@ const TimeLog = () => {
       await timelogService.endTimeLog({ latitude, longitude, notes });
       
       setActiveTimeLog(null);
+      setAutoEndPrediction(null);
       setNotes('');
       setSuccess('Pointage terminé avec succès');
       
@@ -345,6 +419,29 @@ const TimeLog = () => {
           </div>
         ) : (
           <>
+            {/* Notification de fin automatique */}
+            {activeTimeLog && autoEndPrediction && (
+              <div className="auto-end-notification">
+                <div className="notification-icon">
+                  <i className="fas fa-stopwatch"></i>
+                </div>
+                <div className="notification-content">
+                  <div className="notification-title">Fin automatique prévue</div>
+                  <div className="notification-message">
+                    Votre pointage sera automatiquement terminé à <strong>
+                    {autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                    </strong> (15 minutes après votre {autoEndPrediction.basedOn}).
+                  </div>
+                  <div className="notification-tip">
+                    Vous pouvez terminer manuellement votre pointage avant cette heure.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Section de statut actuel */}
             <div className="timelog-card">
               <div className="status-section">
