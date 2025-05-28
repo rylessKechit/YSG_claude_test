@@ -1,7 +1,7 @@
-// server/services/scheduler.service.js (mis à jour avec le nouveau service)
+// server/services/scheduler.service.js - VERSION CORRIGÉE
 const cron = require('node-cron');
 const reportAutomationService = require('./reportAutomation.service');
-const driverTimelogAutomationService = require('./driverTimelogAutomation.service');
+const autoTimelogService = require('./autoTimelog.service'); // Import corrigé
 const emailService = require('./email.service');
 
 class SchedulerService {
@@ -16,18 +16,20 @@ class SchedulerService {
   initialize() {
     console.log('🕒 Initialisation du service de planification...');
 
-    // 1. NOUVEAU: Traitement automatique des pointages drivers - 3h00 du matin
-    const driverTimelogJob = cron.schedule('0 3 * * *', async () => {
-      console.log('🚗 Exécution du traitement automatique des pointages drivers');
+    // 1. AUTO-DÉCONNEXION : 4h00 du matin tous les jours
+    const autoDisconnectJob = cron.schedule('0 4 * * *', async () => {
+      console.log('🔌 Exécution de l\'auto-déconnexion des utilisateurs inactifs');
       try {
-        const result = await driverTimelogAutomationService.processAllDrivers();
+        const result = await autoTimelogService.endOrphanedServices();
         
-        // Envoyer le rapport des corrections aux admins
-        await this.sendDriverTimelogReport(result);
+        // Envoyer un rapport si des déconnexions ont eu lieu
+        if (result.disconnected > 0) {
+          await this.sendAutoDisconnectReport(result);
+        }
         
-        console.log(`✅ Traitement des pointages drivers terminé - ${result.totalCorrections} correction(s) effectuée(s)`);
+        console.log(`✅ Auto-déconnexion terminée - ${result.disconnected}/${result.processed} utilisateur(s) déconnecté(s)`);
       } catch (error) {
-        console.error('❌ Erreur lors du traitement des pointages drivers:', error);
+        console.error('❌ Erreur lors de l\'auto-déconnexion:', error);
       }
     }, {
       scheduled: false,
@@ -76,8 +78,8 @@ class SchedulerService {
       timezone: "Europe/Paris"
     });
 
-    // 5. Nettoyage des anciens rapports - chaque dimanche à 4h00 du matin
-    const cleanupJob = cron.schedule('0 4 * * 0', () => {
+    // 5. Nettoyage des anciens rapports - chaque dimanche à 5h00 du matin
+    const cleanupJob = cron.schedule('0 5 * * 0', () => {
       console.log('🧹 Nettoyage automatique des anciens rapports');
       try {
         reportAutomationService.cleanupOldReports();
@@ -90,13 +92,13 @@ class SchedulerService {
       timezone: "Europe/Paris"
     });
 
-    // Stocker les jobs pour pouvoir les arrêter plus tard
+    // Stocker les jobs
     this.jobs = [
-      { name: 'Driver Timelog Automation', job: driverTimelogJob },
-      { name: 'Daily Report', job: dailyReportJob },
-      { name: 'Weekly Report', job: weeklyReportJob },
-      { name: 'Monthly Report', job: monthlyReportJob },
-      { name: 'Cleanup', job: cleanupJob }
+      { name: 'Auto-déconnexion', job: autoDisconnectJob, schedule: '4h00 quotidien' },
+      { name: 'Rapport quotidien', job: dailyReportJob, schedule: '1h00 quotidien' },
+      { name: 'Rapport hebdomadaire', job: weeklyReportJob, schedule: 'Lundi 2h00' },
+      { name: 'Rapport mensuel', job: monthlyReportJob, schedule: '1er du mois 2h30' },
+      { name: 'Nettoyage', job: cleanupJob, schedule: 'Dimanche 5h00' }
     ];
 
     console.log(`✅ ${this.jobs.length} tâche(s) planifiée(s) configurée(s)`);
@@ -108,9 +110,9 @@ class SchedulerService {
   start() {
     console.log('▶️ Démarrage des tâches planifiées...');
     
-    this.jobs.forEach(({ name, job }) => {
+    this.jobs.forEach(({ name, job, schedule }) => {
       job.start();
-      console.log(`  ✓ ${name} démarrée`);
+      console.log(`  ✓ ${name} démarrée (${schedule})`);
     });
     
     this.isRunning = true;
@@ -149,13 +151,17 @@ class SchedulerService {
   }
 
   /**
-   * Exécute manuellement le traitement des pointages drivers (pour tests)
+   * Exécute manuellement l'auto-déconnexion (pour tests)
    */
-  async runDriverTimelogProcessingNow() {
-    console.log('🧪 Exécution manuelle du traitement des pointages drivers...');
+  async runAutoDisconnectNow() {
+    console.log('🧪 Exécution manuelle de l\'auto-déconnexion...');
     try {
-      const result = await driverTimelogAutomationService.processAllDrivers();
-      await this.sendDriverTimelogReport(result);
+      const result = await autoTimelogService.endOrphanedServices();
+      
+      if (result.disconnected > 0) {
+        await this.sendAutoDisconnectReport(result);
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ Erreur lors de l\'exécution manuelle:', error);
@@ -164,11 +170,11 @@ class SchedulerService {
   }
 
   /**
-   * Envoie le rapport des corrections de pointages aux admins et direction
+   * Envoie le rapport d'auto-déconnexion aux admins
    */
-  async sendDriverTimelogReport(result) {
+  async sendAutoDisconnectReport(result) {
     try {
-      console.log('📧 Envoi du rapport de corrections des pointages...');
+      console.log('📧 Envoi du rapport d\'auto-déconnexion...');
       
       // Récupérer les destinataires (admin et direction)
       const User = require('../models/user.model');
@@ -178,142 +184,105 @@ class SchedulerService {
       }).select('email fullName role');
       
       if (recipients.length === 0) {
-        console.log('⚠️ Aucun destinataire trouvé pour le rapport de pointages');
+        console.log('⚠️ Aucun destinataire trouvé pour le rapport d\'auto-déconnexion');
         return;
       }
 
       // Construire le rapport HTML
-      const reportHtml = this.buildDriverTimelogReportHtml(result);
+      const reportHtml = this.buildAutoDisconnectReportHtml(result);
       
       // Envoyer l'email
       const emailResult = await emailService.sendEmail({
         to: recipients.map(r => r.email),
-        subject: `Rapport automatique - Corrections des pointages drivers (${new Date().toLocaleDateString('fr-FR')})`,
+        subject: `🔌 Rapport d'auto-déconnexion (${new Date().toLocaleDateString('fr-FR')})`,
         templateName: 'default',
         context: {
-          title: 'Rapport de corrections des pointages',
+          title: 'Rapport d\'auto-déconnexion',
           body: reportHtml
         }
       });
       
       if (emailResult.success) {
-        console.log(`✅ Rapport de pointages envoyé à ${recipients.length} destinataire(s)`);
+        console.log(`✅ Rapport d'auto-déconnexion envoyé à ${recipients.length} destinataire(s)`);
       } else {
-        console.error('❌ Erreur lors de l\'envoi du rapport de pointages:', emailResult.error);
+        console.error('❌ Erreur lors de l\'envoi du rapport d\'auto-déconnexion:', emailResult.error);
       }
     } catch (error) {
-      console.error('❌ Erreur lors de l\'envoi du rapport de pointages:', error);
+      console.error('❌ Erreur lors de l\'envoi du rapport d\'auto-déconnexion:', error);
     }
   }
 
   /**
-   * Construit le HTML du rapport de corrections
+   * Construit le HTML du rapport d'auto-déconnexion
    */
-  buildDriverTimelogReportHtml(result) {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toLocaleDateString('fr-FR');
+  buildAutoDisconnectReportHtml(result) {
+    const now = new Date().toLocaleString('fr-FR');
     
     let html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #3B82F6; border-bottom: 2px solid #E5E7EB; padding-bottom: 10px;">
-          🚗 Rapport de traitement automatique des pointages drivers
-        </h2>
-        
-        <div style="background-color: #F3F4F6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #1F2937;">📊 Résumé</h3>
-          <ul style="margin-bottom: 0;">
-            <li><strong>Date traitée :</strong> ${dateStr}</li>
-            <li><strong>Drivers traités :</strong> ${result.processedDrivers}</li>
-            <li><strong>Drivers avec corrections :</strong> ${result.corrections.length}</li>
-            <li><strong>Total des corrections :</strong> ${result.totalCorrections}</li>
-          </ul>
+        <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+          <h2 style="margin: 0;">🔌 Rapport d'auto-déconnexion</h2>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">Exécuté le ${now}</p>
         </div>
+        
+        <div style="background: white; padding: 25px; border: 1px solid #e1e1e1; border-top: none;">
+          <div style="background-color: #F3F4F6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1F2937;">📊 Résumé</h3>
+            <ul style="margin-bottom: 0;">
+              <li><strong>Utilisateurs vérifiés :</strong> ${result.processed}</li>
+              <li><strong>Utilisateurs déconnectés :</strong> ${result.disconnected}</li>
+              <li><strong>Erreurs :</strong> ${result.errors.length}</li>
+            </ul>
+          </div>
     `;
     
-    if (result.corrections.length === 0) {
+    if (result.disconnected === 0) {
       html += `
         <div style="background-color: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
           <p style="margin: 0; color: #047857; font-weight: 500;">
-            ✅ Aucune correction nécessaire - Tous les pointages sont complets !
+            ✅ Aucune déconnexion automatique nécessaire
           </p>
         </div>
       `;
     } else {
-      html += `<h3 style="color: #1F2937; margin-top: 30px;">📝 Détail des corrections</h3>`;
+      html += `
+        <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0; color: #92400E; font-weight: 500;">
+            ⚠️ ${result.disconnected} utilisateur(s) ont été déconnectés automatiquement
+          </p>
+        </div>
+      `;
+    }
+    
+    if (result.errors.length > 0) {
+      html += `<h3 style="color: #EF4444; margin-top: 30px;">❌ Erreurs rencontrées</h3>`;
       
-      result.corrections.forEach((driverData, index) => {
+      result.errors.forEach((error, index) => {
         html += `
-          <div style="background-color: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin: 15px 0;">
-            <h4 style="margin-top: 0; color: #1F2937; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
-              👤 ${driverData.driver.name} (${driverData.driver.username})
-            </h4>
-            
-            <div style="margin-left: 15px;">
-        `;
-        
-        driverData.corrections.forEach((correction, corrIndex) => {
-          const timeStr = new Date(correction.time).toLocaleString('fr-FR');
-          const typeLabel = this.getTypeLabel(correction.type);
-          const iconColor = this.getTypeColor(correction.type);
-          
-          html += `
-            <div style="margin: 10px 0; padding: 10px; background-color: #F9FAFB; border-left: 3px solid ${iconColor}; border-radius: 0 4px 4px 0;">
-              <strong style="color: ${iconColor};">${typeLabel}</strong><br>
-              <span style="color: #6B7280; font-size: 14px;">⏰ ${timeStr}</span><br>
-              <span style="color: #4B5563; font-size: 14px;">📝 ${correction.reason}</span>
-            </div>
-          `;
-        });
-        
-        html += `
-            </div>
+          <div style="background-color: #FEE2E2; border-left: 3px solid #EF4444; padding: 10px; margin: 10px 0; border-radius: 0 4px 4px 0;">
+            <strong>${error.username || 'Utilisateur inconnu'}</strong><br>
+            <span style="color: #B91C1C; font-size: 14px;">${error.error}</span>
           </div>
         `;
       });
     }
     
     html += `
-        <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 30px 0 20px 0;">
-          <p style="margin: 0; color: #92400E; font-size: 14px;">
-            <strong>ℹ️ Information :</strong> Ce rapport est généré automatiquement chaque jour à 3h du matin. 
-            Les corrections sont appliquées selon les règles de gestion des pointages drivers.
+          <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 30px 0 20px 0;">
+            <p style="margin: 0; color: #1E40AF; font-size: 14px;">
+              <strong>ℹ️ Information :</strong> L'auto-déconnexion s'exécute automatiquement chaque jour à 4h du matin. 
+              Les utilisateurs sont déconnectés 15 minutes après leur dernière activité (mouvement ou préparation terminée).
+            </p>
+          </div>
+          
+          <p style="margin-top: 30px; font-size: 12px; color: #6B7280;">
+            Rapport généré automatiquement par le système YSG.
           </p>
         </div>
-        
-        <p style="margin-top: 30px; font-size: 12px; color: #6B7280;">
-          Rapport généré automatiquement le ${new Date().toLocaleString('fr-FR')} par le système YSG.
-        </p>
       </div>
     `;
     
     return html;
-  }
-
-  /**
-   * Retourne le libellé d'un type de pointage
-   */
-  getTypeLabel(type) {
-    const labels = {
-      'start_service': '🟢 Début de service',
-      'start_break': '⏸️ Début de pause',
-      'end_break': '▶️ Fin de pause',
-      'end_service': '🔴 Fin de service'
-    };
-    return labels[type] || type;
-  }
-
-  /**
-   * Retourne la couleur d'un type de pointage
-   */
-  getTypeColor(type) {
-    const colors = {
-      'start_service': '#10B981',
-      'start_break': '#F59E0B', 
-      'end_break': '#3B82F6',
-      'end_service': '#EF4444'
-    };
-    return colors[type] || '#6B7280';
   }
 
   /**
@@ -323,7 +292,18 @@ class SchedulerService {
     return {
       isRunning: this.isRunning,
       jobCount: this.jobs.length,
-      jobs: this.jobs.map(({ name }) => ({ name, active: this.isRunning }))
+      jobs: this.jobs.map(({ name, schedule }) => ({ 
+        name, 
+        schedule,
+        active: this.isRunning 
+      })),
+      nextScheduledTasks: [
+        'Auto-déconnexion: 4h00',
+        'Rapport quotidien: 1h00', 
+        'Rapport hebdomadaire: Lundi 2h00',
+        'Rapport mensuel: 1er du mois 2h30',
+        'Nettoyage: Dimanche 5h00'
+      ]
     };
   }
 }
