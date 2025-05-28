@@ -1,4 +1,4 @@
-// src/components/admin/AdminTools.js (updated)
+// src/components/admin/AdminTools.js (updated with SystemMonitoring)
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -14,12 +14,20 @@ const AdminTools = () => {
           <div className="tool-name">Configuration WhatsApp</div>
         </Link>
         
-        {/* New auto-timelog admin tool */}
+        {/* Auto-timelog admin tool */}
         <Link to="/admin/auto-timelog" className="admin-tool-card">
           <div className="tool-icon">
             <i className="fas fa-user-clock"></i>
           </div>
           <div className="tool-name">Gestion des pointages automatiques</div>
+        </Link>
+        
+        {/* NOUVEAU: System monitoring tool */}
+        <Link to="/admin/system-monitoring" className="admin-tool-card">
+          <div className="tool-icon">
+            <i className="fas fa-desktop"></i>
+          </div>
+          <div className="tool-name">Monitoring Système</div>
         </Link>
         
         {/* Autres outils peuvent être ajoutés ici */}

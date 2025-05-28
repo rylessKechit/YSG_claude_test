@@ -1,4 +1,4 @@
-// server/models/timelog.model.js (CORRIGÉ)
+// server/models/timelog.model.js (CORRIGÉ - champs auto-déconnexion ajoutés)
 const mongoose = require('mongoose');
 
 const locationSchema = new mongoose.Schema({
@@ -41,6 +41,16 @@ const timelogSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // NOUVEAU: Indique si l'utilisateur a été déconnecté automatiquement
+  isAutoDisconnected: {
+    type: Boolean,
+    default: false
+  },
+  // NOUVEAU: Raison de la déconnexion automatique
+  autoDisconnectReason: {
+    type: String,
+    default: undefined
+  },
   // CORRIGÉ: Raison de la création automatique - accepte null/undefined
   autoGenerationReason: {
     type: String,
@@ -64,5 +74,7 @@ const timelogSchema = new mongoose.Schema({
 timelogSchema.index({ userId: 1, status: 1 });
 // Nouvel index pour les types de pointage
 timelogSchema.index({ userId: 1, type: 1, createdAt: -1 });
+// Index pour l'auto-déconnexion
+timelogSchema.index({ status: 1, isAutoDisconnected: 1 });
 
 module.exports = mongoose.model('TimeLog', timelogSchema);
