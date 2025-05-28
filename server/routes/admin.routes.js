@@ -9,7 +9,7 @@ const reportAutomationService = require('../services/reportAutomation.service');
 const locationRoutes = require('./admin.location.routes');
 const whatsappRoutes = require('./whatsapp.routes');
 
-router.use('/', locationRoutes);
+router.use('/locations', locationRoutes);
 router.use('/whatsapp', whatsappRoutes);
 
 // NOUVELLE ROUTE: Tester l'auto-déconnexion manuellement
