@@ -1,10 +1,8 @@
-// ysg_driver/src/pages/TimeLog.js (CORRIGÉ - appels API fixes)
+// ysg_driver/src/pages/TimeLog.js (LOGIQUE SIMPLIFIÉE)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import timelogService from '../services/timelogService';
-import movementService from '../services/movementService';
-import preparationService from '../services/preparationService';
 import Navigation from '../components/Navigation';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
@@ -12,19 +10,51 @@ import '../styles/TimeLog.css';
 
 const TimeLog = () => {
   const [activeTimeLog, setActiveTimeLog] = useState(null);
-  const [todayAnalysis, setTodayAnalysis] = useState(null);
+  const [todaySequence, setTodaySequence] = useState([]);
   const [nextAction, setNextAction] = useState(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [position, setPosition] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [locationStatus, setLocationStatus] = useState(null);
-  const [refreshInterval, setRefreshInterval] = useState(null);
   
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Séquence complète des actions dans l'ordre
+  const SEQUENCE = [
+    { 
+      type: 'start_service', 
+      label: 'Prendre mon service', 
+      icon: '🟢', 
+      color: '#10B981',
+      description: 'Commencer ma journée de travail'
+    },
+    { 
+      type: 'start_break', 
+      label: 'Commencer ma pause', 
+      icon: '⏸️', 
+      color: '#F59E0B',
+      description: 'Prendre ma pause déjeuner'
+    },
+    { 
+      type: 'end_break', 
+      label: 'Reprendre mon service', 
+      icon: '▶️', 
+      color: '#3B82F6',
+      description: 'Terminer ma pause et reprendre le travail'
+    },
+    { 
+      type: 'end_service', 
+      label: 'Terminer mon service', 
+      icon: '🔴', 
+      color: '#EF4444',
+      description: 'Finir ma journée de travail'
+    }
+  ];
 
   // Obtenir la géolocalisation actuelle
   const getCurrentPosition = () => {
@@ -50,13 +80,13 @@ const TimeLog = () => {
         let errorMessage;
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage = 'Accès à la géolocalisation refusé. Veuillez autoriser l\'accès à votre position dans les paramètres de votre navigateur.';
+            errorMessage = 'Accès à la géolocalisation refusé. Veuillez autoriser l\'accès à votre position.';
             break;
           case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Position indisponible. Veuillez vérifier que le GPS de votre appareil est activé.';
+            errorMessage = 'Position indisponible. Vérifiez que le GPS est activé.';
             break;
           case error.TIMEOUT:
-            errorMessage = 'La demande de géolocalisation a expiré. Veuillez réessayer.';
+            errorMessage = 'Délai d\'attente dépassé. Veuillez réessayer.';
             break;
           default:
             errorMessage = `Erreur de géolocalisation: ${error.message}`;
@@ -72,185 +102,43 @@ const TimeLog = () => {
     );
   };
 
-  // Démarrer la mise à jour périodique de la position
-  useEffect(() => {
-    getCurrentPosition();
-
-    // Mettre à jour la position toutes les 30 secondes
-    const interval = setInterval(() => {
-      getCurrentPosition();
-    }, 30000);
-
-    setRefreshInterval(interval);
-
-    return () => {
-      if (refreshInterval) clearInterval(refreshInterval);
-    };
-  }, []);
-
-  // CORRIGÉ: Calculer l'heure de fin automatique prévue
-  const calculateAutoEndTime = async (activeTimelog) => {
-    try {
-      if (!activeTimelog || !currentUser) return null;
-      
-      // Logique différente selon le rôle de l'utilisateur
-      if (['driver', 'team-leader'].includes(currentUser.role)) {
-        // Pour les chauffeurs et chefs d'équipe, vérifier leur dernier mouvement terminé
-        try {
-          // CORRIGÉ: Utiliser getMovements au lieu de getCompletedMovements
-          const movementsResponse = await movementService.getMovements(1, 1, 'completed');
-          
-          if (movementsResponse?.movements?.length > 0) {
-            const lastMovement = movementsResponse.movements[0];
-            const lastMovementTime = new Date(lastMovement.arrivalTime || lastMovement.updatedAt);
-            
-            // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
-            const predictedEndTime = new Date(lastMovementTime.getTime() + 15 * 60000);
-            
-            return {
-              predictedTime: predictedEndTime,
-              basedOn: 'dernier mouvement',
-              activityTime: lastMovementTime
-            };
-          }
-        } catch (movementError) {
-          console.error('Erreur lors de la récupération des mouvements:', movementError);
-        }
-      } else if (currentUser.role === 'preparator') {
-        // Pour les préparateurs, vérifier leur dernière préparation terminée
-        try {
-          // CORRIGÉ: Utiliser getPreparations avec les bons paramètres
-          const preparationsResponse = await preparationService.getPreparations(1, 1, 'completed');
-          
-          if (preparationsResponse?.preparations?.length > 0) {
-            const lastPreparation = preparationsResponse.preparations[0];
-            const lastPreparationTime = new Date(lastPreparation.endTime || lastPreparation.updatedAt);
-            
-            // Ajouter 15 minutes pour obtenir l'heure prévue de fin automatique
-            const predictedEndTime = new Date(lastPreparationTime.getTime() + 15 * 60000);
-            
-            return {
-              predictedTime: predictedEndTime,
-              basedOn: 'dernière préparation',
-              activityTime: lastPreparationTime
-            };
-          }
-        } catch (preparationError) {
-          console.error('Erreur lors de la récupération des préparations:', preparationError);
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Erreur lors du calcul de l\'heure de fin automatique:', error);
-      return null;
-    }
-  };
-
-  // Analyser les pointages du jour et déterminer la prochaine action
-  const analyzeCurrentDay = async () => {
+  // Analyser les pointages d'aujourd'hui
+  const analyzeToday = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const analysis = await timelogService.analyzeDriverTimelogs(null, today);
       
-      setTodayAnalysis(analysis);
+      // Extraire la séquence des pointages déjà effectués
+      const completedSequence = analysis.analysis.sequence || [];
+      setTodaySequence(completedSequence);
       
-      // Déterminer la prochaine action intelligente
-      const completedTypes = analysis.analysis.sequence.map(s => s.type);
-      const nextActionInfo = determineNextAction(completedTypes);
-      setNextAction(nextActionInfo);
+      // Déterminer la prochaine action
+      const nextActionIndex = completedSequence.length;
       
-    } catch (err) {
-      console.error('Erreur lors de l\'analyse des pointages:', err);
-    }
-  };
-
-  // Déterminer intelligemment la prochaine action
-  const determineNextAction = (completedTypes) => {
-    const count = completedTypes.length;
-    
-    switch (count) {
-      case 0:
-        return {
-          type: 'start_service',
-          label: 'Démarrer mon service',
-          description: 'Commencer votre journée de travail',
-          icon: '🟢',
-          color: '#10B981',
-          step: 1,
-          totalSteps: 4
-        };
-        
-      case 1:
-        if (completedTypes.includes('start_service')) {
-          return {
-            type: 'start_break',
-            label: 'Démarrer ma pause',
-            description: 'Prendre votre pause (1h maximum)',
-            icon: '⏸️',
-            color: '#F59E0B',
-            step: 2,
-            totalSteps: 4
-          };
-        }
-        break;
-        
-      case 2:
-        if (completedTypes.includes('start_service') && completedTypes.includes('start_break')) {
-          return {
-            type: 'end_break',
-            label: 'Reprendre mon service',
-            description: 'Terminer votre pause et reprendre le travail',
-            icon: '▶️',
-            color: '#3B82F6',
-            step: 3,
-            totalSteps: 4
-          };
-        }
-        break;
-        
-      case 3:
-        if (completedTypes.includes('start_service') && 
-            completedTypes.includes('start_break') && 
-            completedTypes.includes('end_break')) {
-          return {
-            type: 'end_service',
-            label: 'Terminer mon service',
-            description: 'Finaliser votre journée de travail',
-            icon: '🔴',
-            color: '#EF4444',
-            step: 4,
-            totalSteps: 4
-          };
-        }
-        break;
-        
-      case 4:
-      default:
-        return {
+      if (nextActionIndex < SEQUENCE.length) {
+        setNextAction({
+          ...SEQUENCE[nextActionIndex],
+          step: nextActionIndex + 1,
+          totalSteps: SEQUENCE.length
+        });
+      } else {
+        // Journée complète
+        setNextAction({
           type: null,
           label: 'Journée terminée',
-          description: 'Tous vos pointages sont complets pour aujourd\'hui',
           icon: '✅',
           color: '#10B981',
-          step: 4,
-          totalSteps: 4
-        };
+          description: 'Tous vos pointages sont complets',
+          step: SEQUENCE.length,
+          totalSteps: SEQUENCE.length
+        });
+      }
+    } catch (err) {
+      console.error('Erreur lors de l\'analyse:', err);
     }
-    
-    // Fallback si séquence inattendue
-    return {
-      type: 'start_service',
-      label: 'Démarrer mon service',
-      description: 'Action par défaut',
-      icon: '🟢',
-      color: '#10B981',
-      step: 1,
-      totalSteps: 4
-    };
   };
 
-  // Vérifier le pointage actif et analyser la journée au chargement
+  // Charger les données au démarrage
   useEffect(() => {
     const initializeTimeLog = async () => {
       try {
@@ -261,18 +149,9 @@ const TimeLog = () => {
           .catch(err => err.response?.status === 404 ? null : Promise.reject(err));
         setActiveTimeLog(timeLog);
         
-        // Analyser la journée actuelle (seulement pour les drivers)
+        // Analyser les pointages d'aujourd'hui (seulement pour les drivers)
         if (currentUser && currentUser.role === 'driver') {
-          await analyzeCurrentDay();
-          
-          // Calculer l'heure de fin automatique prévue si pointage actif
-          if (timeLog) {
-            const prediction = await calculateAutoEndTime(timeLog);
-            // Stocker la prédiction pour l'affichage
-            if (prediction) {
-              setAutoEndPrediction(prediction);
-            }
-          }
+          await analyzeToday();
         }
         
         setLoading(false);
@@ -288,11 +167,15 @@ const TimeLog = () => {
     }
   }, [currentUser]);
 
-  // État pour la prédiction de fin automatique
-  const [autoEndPrediction, setAutoEndPrediction] = useState(null);
+  // Obtenir la position GPS au démarrage et la rafraîchir périodiquement
+  useEffect(() => {
+    getCurrentPosition();
+    const interval = setInterval(getCurrentPosition, 30000); // Toutes les 30 secondes
+    return () => clearInterval(interval);
+  }, []);
 
-  // Démarrer un pointage intelligent
-  const startSmartTimeLog = async () => {
+  // Effectuer l'action de pointage
+  const performTimelogAction = async () => {
     if (!position) {
       setError('La position GPS est requise pour le pointage');
       return;
@@ -304,39 +187,45 @@ const TimeLog = () => {
     }
     
     try {
-      setLoading(true);
+      setActionLoading(true);
       setError(null);
       
       const { latitude, longitude } = position;
       
-      // Utiliser le service intelligent avec le type déterminé
-      const response = await timelogService.startDriverTimeLog(
-        nextAction.type,
-        { latitude, longitude },
-        notes
-      );
+      // Si c'est une fin de pause ou fin de service, terminer le pointage actif
+      if (nextAction.type === 'end_break' || nextAction.type === 'end_service') {
+        await timelogService.endTimeLog({ latitude, longitude, notes });
+        setActiveTimeLog(null);
+      } else {
+        // Sinon, démarrer un nouveau pointage
+        const response = await timelogService.startDriverTimeLog(
+          nextAction.type,
+          { latitude, longitude },
+          notes
+        );
+        setActiveTimeLog(response.timeLog);
+      }
       
-      setActiveTimeLog(response.timeLog);
       setNotes('');
       setSuccess(`${nextAction.label} - Pointage effectué avec succès`);
       
-      // Rafraîchir l'analyse après le pointage
-      await analyzeCurrentDay();
+      // Rafraîchir l'analyse
+      await analyzeToday();
       
       setTimeout(() => setSuccess(null), 3000);
-      setLoading(false);
+      setActionLoading(false);
     } catch (err) {
-      setLoading(false);
+      setActionLoading(false);
       
-      // Gestion spécifique des erreurs de localisation/réseau
+      // Gestion des erreurs spécifiques
       if (err.response?.data?.error === 'NETWORK_NOT_ALLOWED') {
-        setError('Réseau non autorisé pour le pointage. Vous devez être connecté à un réseau d\'entreprise.');
+        setError('Réseau non autorisé. Vous devez être connecté au réseau d\'entreprise.');
       } else if (err.response?.data?.error === 'LOCATION_NOT_ALLOWED') {
         const details = err.response?.data?.details;
         let errorMsg = 'Vous devez être à un emplacement autorisé pour pointer.';
         
         if (details && details.closestLocation) {
-          errorMsg += ` L'emplacement autorisé le plus proche est "${details.closestLocation}" à ${details.distance} mètres.`;
+          errorMsg += ` L'emplacement le plus proche est "${details.closestLocation}" à ${details.distance} mètres.`;
         }
         
         setError(errorMsg);
@@ -348,53 +237,13 @@ const TimeLog = () => {
     }
   };
 
-  // Terminer un pointage
-  const endTimeLog = async () => {
-    if (!position) {
-      setError('La position GPS est requise pour terminer le pointage');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const { latitude, longitude } = position;
-      await timelogService.endTimeLog({ latitude, longitude, notes });
-      
-      setActiveTimeLog(null);
-      setAutoEndPrediction(null);
-      setNotes('');
-      setSuccess('Pointage terminé avec succès');
-      
-      // Rafraîchir l'analyse après la fin du pointage
-      await analyzeCurrentDay();
-      
-      setTimeout(() => setSuccess(null), 3000);
-      setLoading(false);
-    } catch (err) {
-      setLoading(false);
-      
-      if (err.response?.data?.error === 'NETWORK_NOT_ALLOWED') {
-        setError('Réseau non autorisé pour le pointage. Vous devez être connecté à un réseau d\'entreprise.');
-      } else if (err.response?.data?.error === 'LOCATION_NOT_ALLOWED') {
-        const details = err.response?.data?.details;
-        let errorMsg = 'Vous devez être à un emplacement autorisé pour terminer le pointage.';
-        
-        if (details && details.closestLocation) {
-          errorMsg += ` L'emplacement autorisé le plus proche est "${details.closestLocation}" à ${details.distance} mètres.`;
-        }
-        
-        setError(errorMsg);
-      } else {
-        setError(err.response?.data?.message || 'Erreur lors de la fin du pointage');
-      }
-      
-      console.error(err);
-    }
+  // Calculer le pourcentage de progression
+  const getProgressPercentage = () => {
+    if (!nextAction) return 0;
+    return Math.round(((nextAction.step - 1) / nextAction.totalSteps) * 100);
   };
 
-  // Fonction pour formater l'heure
+  // Formater l'heure
   const formatTime = (dateString) => {
     return new Date(dateString).toLocaleTimeString('fr-FR', {
       hour: '2-digit',
@@ -407,7 +256,7 @@ const TimeLog = () => {
     <div>
       <Navigation />
       <div className="timelog-container">
-        <h1 className="timelog-title">Gestion du pointage</h1>
+        <h1 className="timelog-title">Pointage</h1>
         
         {error && <AlertMessage type="error" message={error} onDismiss={() => setError(null)} />}
         {success && <AlertMessage type="success" message={success} onDismiss={() => setSuccess(null)} />}
@@ -419,31 +268,9 @@ const TimeLog = () => {
           </div>
         ) : (
           <>
-            {/* Notification de fin automatique */}
-            {activeTimeLog && autoEndPrediction && (
-              <div className="auto-end-notification">
-                <div className="notification-icon">
-                  <i className="fas fa-stopwatch"></i>
-                </div>
-                <div className="notification-content">
-                  <div className="notification-title">Fin automatique prévue</div>
-                  <div className="notification-message">
-                    Votre pointage sera automatiquement terminé à <strong>
-                    {autoEndPrediction.predictedTime.toLocaleTimeString('fr-FR', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                    </strong> (15 minutes après votre {autoEndPrediction.basedOn}).
-                  </div>
-                  <div className="notification-tip">
-                    Vous pouvez terminer manuellement votre pointage avant cette heure.
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Section de statut actuel */}
             <div className="timelog-card">
+              
+              {/* Statut actuel */}
               <div className="status-section">
                 <h2 className="status-title">Statut actuel</h2>
                 <div className="status-indicator">
@@ -455,7 +282,7 @@ const TimeLog = () => {
                 
                 {activeTimeLog && (
                   <p className="timestamp">
-                    Service démarré le {new Date(activeTimeLog.startTime).toLocaleString()}
+                    Démarré le {new Date(activeTimeLog.startTime).toLocaleString('fr-FR')}
                   </p>
                 )}
               </div>
@@ -471,43 +298,40 @@ const TimeLog = () => {
                       <div 
                         className="progress-fill"
                         style={{ 
-                          width: `${(nextAction.step - 1) / nextAction.totalSteps * 100}%`,
+                          width: `${getProgressPercentage()}%`,
                           backgroundColor: nextAction.color
                         }}
                       ></div>
                     </div>
                     <span className="progress-text">
-                      Étape {nextAction.step > nextAction.totalSteps ? nextAction.totalSteps : nextAction.step} sur {nextAction.totalSteps}
+                      Étape {nextAction.step} sur {nextAction.totalSteps}
                     </span>
                   </div>
 
-                  {/* Pointages de la journée */}
-                  {todayAnalysis && todayAnalysis.analysis.sequence.length > 0 && (
+                  {/* Pointages effectués aujourd'hui */}
+                  {todaySequence.length > 0 && (
                     <div className="today-sequence">
                       <h3>Pointages d'aujourd'hui :</h3>
                       <div className="sequence-list">
-                        {todayAnalysis.analysis.sequence.map((item, index) => (
-                          <div key={index} className="sequence-item">
-                            <span className="sequence-icon">
-                              {item.type === 'start_service' ? '🟢' :
-                               item.type === 'start_break' ? '⏸️' :
-                               item.type === 'end_break' ? '▶️' :
-                               item.type === 'end_service' ? '🔴' : '📝'}
-                            </span>
-                            <span className="sequence-label">
-                              {item.type === 'start_service' ? 'Service démarré' :
-                               item.type === 'start_break' ? 'Pause commencée' :
-                               item.type === 'end_break' ? 'Pause terminée' :
-                               item.type === 'end_service' ? 'Service terminé' : 'Pointage'}
-                            </span>
-                            <span className="sequence-time">
-                              {formatTime(item.time)}
-                            </span>
-                            {item.isAutoGenerated && (
-                              <span className="auto-badge">Auto</span>
-                            )}
-                          </div>
-                        ))}
+                        {todaySequence.map((item, index) => {
+                          const sequenceItem = SEQUENCE.find(s => s.type === item.type);
+                          return (
+                            <div key={index} className="sequence-item">
+                              <span className="sequence-icon">
+                                {sequenceItem?.icon || '📝'}
+                              </span>
+                              <span className="sequence-label">
+                                {sequenceItem?.label || 'Pointage'}
+                              </span>
+                              <span className="sequence-time">
+                                {formatTime(item.time)}
+                              </span>
+                              {item.isAutoGenerated && (
+                                <span className="auto-badge">Auto</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -568,43 +392,26 @@ const TimeLog = () => {
               
               {/* Section des notes */}
               <div className="notes-section">
-                <label htmlFor="notes" className="notes-label">Notes</label>
+                <label htmlFor="notes" className="notes-label">Notes (optionnel)</label>
                 <textarea
                   id="notes"
                   className="notes-textarea"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ajouter des notes (facultatif)"
-                  disabled={loading}
+                  placeholder="Ajouter une note..."
+                  disabled={actionLoading}
                 ></textarea>
               </div>
               
-              {/* Bouton d'action intelligent */}
-              {activeTimeLog ? (
+              {/* Bouton d'action principal */}
+              {nextAction && nextAction.type ? (
                 <button
-                  className="btn-end"
-                  onClick={endTimeLog}
-                  disabled={loading || !position}
-                >
-                  {loading ? (
-                    <>
-                      <div className="spinner-sm"></div>
-                      <span>Traitement en cours...</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-stop-circle"></i> Terminer le pointage actuel
-                    </>
-                  )}
-                </button>
-              ) : nextAction ? (
-                <button
-                  className="btn-start smart-btn"
-                  onClick={startSmartTimeLog}
-                  disabled={loading || !position || !nextAction.type}
+                  className="smart-btn"
+                  onClick={performTimelogAction}
+                  disabled={actionLoading || !position}
                   style={{ backgroundColor: nextAction.color }}
                 >
-                  {loading ? (
+                  {actionLoading ? (
                     <>
                       <div className="spinner-sm"></div>
                       <span>Traitement en cours...</span>
@@ -629,8 +436,8 @@ const TimeLog = () => {
               <div className="timelog-info">
                 <i className="fas fa-info-circle"></i>
                 <p>
-                  Le système propose automatiquement le bon type de pointage selon votre progression quotidienne. 
-                  Quatre pointages sont requis par jour : début de service, début/fin de pause, et fin de service.
+                  Appuyez sur le bouton pour effectuer automatiquement le prochain pointage. 
+                  L'application suit automatiquement votre progression : service → pause → reprise → fin.
                 </p>
               </div>
             </div>

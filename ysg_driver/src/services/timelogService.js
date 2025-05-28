@@ -1,4 +1,4 @@
-// ysg_driver/src/services/timelogService.js (CORRECTION COMPLÈTE)
+// ysg_driver/src/services/timelogService.js (SIMPLIFIÉ)
 import { api, fetchWithCache, invalidateCache } from './authService';
 import { ENDPOINTS } from '../config';
 
@@ -16,28 +16,21 @@ const timelogService = {
     }
   },
   
-  // Démarrer un pointage avec type spécifique
-  startTimeLog: async (data) => {
-    try {
-      const response = await api.post(ENDPOINTS.TIMELOGS.BASE, data);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-
   // Démarrer un pointage avec type spécifique pour drivers
   startDriverTimeLog: async (type, locationData, notes = '') => {
     try {
       const data = {
-        ...locationData,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
         notes,
         type // start_service, start_break, end_break, end_service
       };
       
+      console.log(`🟢 Démarrage du pointage de type: ${type}`);
       const response = await api.post(ENDPOINTS.TIMELOGS.BASE, data);
       return response.data;
     } catch (error) {
+      console.error(`❌ Erreur lors du pointage ${type}:`, error);
       throw error;
     }
   },
@@ -45,13 +38,37 @@ const timelogService = {
   // Terminer un pointage
   endTimeLog: async (data) => {
     try {
+      console.log('🔴 Fin du pointage actif');
       const response = await api.post(`${ENDPOINTS.TIMELOGS.BASE}/end`, data);
       return response.data;
     } catch (error) {
+      console.error('❌ Erreur lors de la fin du pointage:', error);
       throw error;
     }
   },
   
+  // Analyser les pointages d'un driver pour une date donnée
+  analyzeDriverTimelogs: async (userId = null, date = null) => {
+    try {
+      let url = `${ENDPOINTS.TIMELOGS.BASE}/my-analysis`;
+      
+      const params = new URLSearchParams();
+      if (date) {
+        params.append('date', date);
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de l\'analyse des pointages:', error);
+      throw error;
+    }
+  },
+
   // Récupérer l'historique des pointages
   getTimeLogs: async (page = 1, limit = 10, status = null, filters = {}) => {
     try {
@@ -77,181 +94,143 @@ const timelogService = {
     }
   },
 
-  // CORRECTION: Analyser les pointages d'un driver - utiliser la nouvelle route
-  analyzeDriverTimelogs: async (userId = null, date = null) => {
+  // Obtenir le statut et la progression de la journée
+  getDayStatus: async () => {
     try {
-      // Utiliser la route my-analysis pour éviter les problèmes de permissions
-      let url = `${ENDPOINTS.TIMELOGS.BASE}/my-analysis`;
-      
-      const params = new URLSearchParams();
-      if (date) {
-        params.append('date', date);
-      }
-      
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-      
-      const response = await api.get(url);
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors de l\'analyse des pointages:', error);
-      throw error;
-    }
-  },
-
-  // Déclencher le traitement automatique (admin seulement)
-  triggerDriverAutomation: async () => {
-    try {
-      const response = await api.post(`${ENDPOINTS.TIMELOGS.BASE}/auto-process-drivers`);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  // Obtenir les types de pointages valides pour un driver
-  getValidTimelogTypes: (currentTypes = []) => {
-    const allTypes = [
-      { value: 'start_service', label: '🟢 Début de service', description: 'Commencer votre journée de travail' },
-      { value: 'start_break', label: '⏸️ Début de pause', description: 'Commencer votre pause (max 1h/jour)' },
-      { value: 'end_break', label: '▶️ Fin de pause', description: 'Terminer votre pause' },
-      { value: 'end_service', label: '🔴 Fin de service', description: 'Terminer votre journée de travail' }
-    ];
-
-    // Logique pour déterminer quels types sont disponibles
-    const available = [];
-    
-    if (!currentTypes.includes('start_service')) {
-      available.push(allTypes[0]); // start_service
-    } else {
-      if (!currentTypes.includes('start_break') && !currentTypes.includes('end_service')) {
-        available.push(allTypes[1]); // start_break
-      }
-      
-      if (currentTypes.includes('start_break') && !currentTypes.includes('end_break')) {
-        available.push(allTypes[2]); // end_break
-      }
-      
-      if (!currentTypes.includes('end_service') && 
-          (!currentTypes.includes('start_break') || currentTypes.includes('end_break'))) {
-        available.push(allTypes[3]); // end_service
-      }
-    }
-    
-    return { allTypes, available };
-  },
-
-  // Valider si un type de pointage est permis
-  validateTimelogType: async (type) => {
-    try {
-      // Obtenir les pointages d'aujourd'hui
       const today = new Date().toISOString().split('T')[0];
       const analysis = await timelogService.analyzeDriverTimelogs(null, today);
       
-      const existingTypes = analysis.analysis.sequence.map(s => s.type);
+      const sequence = analysis.analysis.sequence || [];
+      const completedTypes = sequence.map(s => s.type);
       
-      // Utiliser la même logique que le backend
-      switch (type) {
-        case 'start_service':
-          if (existingTypes.includes('start_service')) {
-            return { valid: false, message: 'Vous avez déjà commencé votre service aujourd\'hui' };
-          }
-          break;
-          
-        case 'start_break':
-          if (!existingTypes.includes('start_service')) {
-            return { valid: false, message: 'Vous devez d\'abord commencer votre service' };
-          }
-          if (existingTypes.includes('start_break')) {
-            return { valid: false, message: 'Vous avez déjà commencé votre pause aujourd\'hui' };
-          }
-          if (existingTypes.includes('end_service')) {
-            return { valid: false, message: 'Vous ne pouvez plus prendre de pause après la fin de service' };
-          }
-          break;
-          
-        case 'end_break':
-          if (!existingTypes.includes('start_break')) {
-            return { valid: false, message: 'Vous devez d\'abord commencer votre pause' };
-          }
-          if (existingTypes.includes('end_break')) {
-            return { valid: false, message: 'Vous avez déjà terminé votre pause aujourd\'hui' };
-          }
-          break;
-          
-        case 'end_service':
-          if (!existingTypes.includes('start_service')) {
-            return { valid: false, message: 'Vous devez d\'abord commencer votre service' };
-          }
-          if (existingTypes.includes('end_service')) {
-            return { valid: false, message: 'Vous avez déjà terminé votre service aujourd\'hui' };
-          }
-          if (existingTypes.includes('start_break') && !existingTypes.includes('end_break')) {
-            return { valid: false, message: 'Vous devez d\'abord terminer votre pause' };
-          }
-          break;
+      // Définir les étapes dans l'ordre
+      const steps = [
+        { type: 'start_service', label: 'Prise de service', icon: '🟢' },
+        { type: 'start_break', label: 'Début de pause', icon: '⏸️' },
+        { type: 'end_break', label: 'Fin de pause', icon: '▶️' },
+        { type: 'end_service', label: 'Fin de service', icon: '🔴' }
+      ];
+      
+      // Trouver l'étape suivante
+      let nextStepIndex = completedTypes.length;
+      let nextStep = null;
+      let isComplete = false;
+      
+      if (nextStepIndex < steps.length) {
+        nextStep = steps[nextStepIndex];
+      } else {
+        isComplete = true;
       }
       
-      return { valid: true };
-    } catch (error) {
-      console.error('Erreur lors de la validation:', error);
-      return { valid: false, message: 'Erreur lors de la validation' };
-    }
-  },
-
-  // Obtenir le résumé de la journée d'un driver
-  getDailySummary: async (date = null) => {
-    try {
-      const targetDate = date || new Date().toISOString().split('T')[0];
-      const analysis = await timelogService.analyzeDriverTimelogs(null, targetDate);
-      
       return {
-        date: targetDate,
-        isComplete: analysis.analysis.isComplete,
-        completedTypes: analysis.analysis.sequence.map(s => s.type),
-        missingTypes: analysis.analysis.missingTypes,
-        sequence: analysis.analysis.sequence,
-        nextAction: timelogService.getNextAction(analysis.analysis),
-        progress: timelogService.calculateProgress(analysis.analysis)
+        sequence,
+        completedSteps: completedTypes.length,
+        totalSteps: steps.length,
+        nextStep,
+        isComplete,
+        progressPercentage: Math.round((completedTypes.length / steps.length) * 100)
       };
     } catch (error) {
+      console.error('Erreur lors de la récupération du statut:', error);
       throw error;
     }
   },
 
-  // Déterminer la prochaine action recommandée
-  getNextAction: (analysis) => {
-    if (!analysis.hasServiceStart) {
-      return { type: 'start_service', label: 'Commencer votre service', urgent: false };
+  // Déterminer l'action recommandée suivante
+  getNextAction: (completedTypes = []) => {
+    const actions = [
+      {
+        type: 'start_service',
+        label: 'Prendre mon service',
+        description: 'Commencer votre journée',
+        icon: '🟢',
+        color: '#10B981'
+      },
+      {
+        type: 'start_break',
+        label: 'Commencer ma pause',
+        description: 'Prendre votre pause déjeuner',
+        icon: '⏸️',
+        color: '#F59E0B'
+      },
+      {
+        type: 'end_break',
+        label: 'Reprendre mon service',
+        description: 'Terminer votre pause',
+        icon: '▶️',
+        color: '#3B82F6'
+      },
+      {
+        type: 'end_service',
+        label: 'Terminer mon service',
+        description: 'Finir votre journée',
+        icon: '🔴',
+        color: '#EF4444'
+      }
+    ];
+    
+    const nextIndex = completedTypes.length;
+    
+    if (nextIndex < actions.length) {
+      return {
+        ...actions[nextIndex],
+        step: nextIndex + 1,
+        totalSteps: actions.length
+      };
     }
     
-    if (!analysis.hasBreakStart && !analysis.hasServiceEnd) {
-      return { type: 'start_break', label: 'Prendre votre pause', urgent: false };
-    }
-    
-    if (analysis.hasBreakStart && !analysis.hasBreakEnd) {
-      return { type: 'end_break', label: 'Terminer votre pause', urgent: true };
-    }
-    
-    if (!analysis.hasServiceEnd) {
-      return { type: 'end_service', label: 'Terminer votre service', urgent: false };
-    }
-    
-    return { type: null, label: 'Journée complète', urgent: false };
+    return {
+      type: null,
+      label: 'Journée terminée',
+      description: 'Tous vos pointages sont complets',
+      icon: '✅',
+      color: '#10B981',
+      step: actions.length,
+      totalSteps: actions.length
+    };
   },
 
-  // Calculer le pourcentage de progression
-  calculateProgress: (analysis) => {
-    const totalSteps = 4;
-    let completedSteps = 0;
+  // Valider si une action est possible
+  validateAction: (type, completedTypes = []) => {
+    switch (type) {
+      case 'start_service':
+        if (completedTypes.includes('start_service')) {
+          return { valid: false, message: 'Service déjà démarré aujourd\'hui' };
+        }
+        break;
+        
+      case 'start_break':
+        if (!completedTypes.includes('start_service')) {
+          return { valid: false, message: 'Vous devez d\'abord prendre votre service' };
+        }
+        if (completedTypes.includes('start_break')) {
+          return { valid: false, message: 'Pause déjà prise aujourd\'hui' };
+        }
+        break;
+        
+      case 'end_break':
+        if (!completedTypes.includes('start_break')) {
+          return { valid: false, message: 'Vous devez d\'abord commencer votre pause' };
+        }
+        if (completedTypes.includes('end_break')) {
+          return { valid: false, message: 'Pause déjà terminée aujourd\'hui' };
+        }
+        break;
+        
+      case 'end_service':
+        if (!completedTypes.includes('start_service')) {
+          return { valid: false, message: 'Vous devez d\'abord prendre votre service' };
+        }
+        if (completedTypes.includes('end_service')) {
+          return { valid: false, message: 'Service déjà terminé aujourd\'hui' };
+        }
+        if (completedTypes.includes('start_break') && !completedTypes.includes('end_break')) {
+          return { valid: false, message: 'Vous devez d\'abord terminer votre pause' };
+        }
+        break;
+    }
     
-    if (analysis.hasServiceStart) completedSteps++;
-    if (analysis.hasBreakStart) completedSteps++;
-    if (analysis.hasBreakEnd) completedSteps++;
-    if (analysis.hasServiceEnd) completedSteps++;
-    
-    return Math.round((completedSteps / totalSteps) * 100);
+    return { valid: true };
   },
 
   // Formater la durée entre deux pointages
@@ -267,6 +246,16 @@ const timelogService = {
       return `${hours}h ${minutes}min`;
     }
     return `${minutes}min`;
+  },
+
+  // Déclencher le traitement automatique (admin seulement)
+  triggerDriverAutomation: async () => {
+    try {
+      const response = await api.post(`${ENDPOINTS.TIMELOGS.BASE}/auto-process-drivers`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   }
 };
 
