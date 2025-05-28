@@ -40,13 +40,15 @@ class AutoTimelogService {
             continue;
           }
           
+          console.log(`🔍 Vérification de ${user.fullName} (${user.role})`);
+          
           // Déterminer si l'utilisateur doit être déconnecté
           const shouldDisconnect = await this.shouldDisconnectUser(log, user);
           
           if (shouldDisconnect.disconnect) {
             await this.disconnectUser(log, user, shouldDisconnect.reason);
             results.disconnected++;
-            console.log(`✅ ${user.fullName} (${user.role}) déconnecté automatiquement`);
+            console.log(`✅ ${user.fullName} (${user.role}) déconnecté automatiquement: ${shouldDisconnect.reason}`);
           } else {
             console.log(`ℹ️ ${user.fullName} (${user.role}) reste connecté: ${shouldDisconnect.reason}`);
           }
@@ -75,6 +77,8 @@ class AutoTimelogService {
     const now = new Date();
     const logStartTime = new Date(timeLog.startTime);
     const hoursConnected = (now - logStartTime) / (1000 * 60 * 60);
+    
+    console.log(`  📊 ${user.fullName}: connecté depuis ${Math.round(hoursConnected * 100) / 100}h`);
     
     // Si connecté depuis plus de 24h, déconnecter obligatoirement
     if (hoursConnected > 24) {
@@ -113,18 +117,24 @@ class AutoTimelogService {
    */
   async shouldDisconnectDriver(user, timeLog) {
     try {
+      console.log(`  🚗 Analyse du chauffeur ${user.fullName}...`);
+      
       // Chercher le dernier mouvement terminé
       const lastCompletedMovement = await Movement.findOne({
         userId: user._id,
         status: 'completed'
-      }).sort({ arrivalTime: -1 });
+      }).sort({ updatedAt: -1, arrivalTime: -1 });
+      
+      console.log(`    📊 Dernier mouvement terminé: ${lastCompletedMovement ? 'trouvé' : 'aucun'}`);
       
       if (!lastCompletedMovement) {
         // Pas de mouvement terminé, vérifier s'il y a un mouvement en cours
         const activeMovement = await Movement.findOne({
           userId: user._id,
-          status: 'in-progress'
+          status: { $in: ['in-progress', 'preparing'] }
         });
+        
+        console.log(`    📊 Mouvement actif: ${activeMovement ? activeMovement.status : 'aucun'}`);
         
         if (!activeMovement) {
           const logStartTime = new Date(timeLog.startTime);
@@ -142,7 +152,7 @@ class AutoTimelogService {
         
         return {
           disconnect: false,
-          reason: 'Mouvement en cours ou récemment connecté'
+          reason: activeMovement ? `Mouvement ${activeMovement.status}` : 'Récemment connecté sans mouvement'
         };
       }
       
@@ -151,11 +161,13 @@ class AutoTimelogService {
       const now = new Date();
       const minutesSinceLastMovement = (now - lastMovementTime) / (1000 * 60);
       
+      console.log(`    📊 Dernier mouvement terminé il y a ${Math.round(minutesSinceLastMovement)} minutes`);
+      
       // CORRECTION: Déconnecter 15 minutes après le dernier mouvement terminé
       if (minutesSinceLastMovement > 15) {
         return {
           disconnect: true,
-          reason: `Dernier mouvement terminé il y a ${Math.round(minutesSinceLastMovement)} minutes`
+          reason: `Dernier mouvement terminé il y a ${Math.round(minutesSinceLastMovement)} minutes (> 15min)`
         };
       }
       
@@ -177,11 +189,15 @@ class AutoTimelogService {
    */
   async shouldDisconnectPreparator(user, timeLog) {
     try {
+      console.log(`  🔧 Analyse du préparateur ${user.fullName}...`);
+      
       // Chercher la dernière préparation terminée
       const lastCompletedPreparation = await Preparation.findOne({
         userId: user._id,
         status: 'completed'
-      }).sort({ endTime: -1 });
+      }).sort({ updatedAt: -1, endTime: -1 });
+      
+      console.log(`    📊 Dernière préparation terminée: ${lastCompletedPreparation ? 'trouvée' : 'aucune'}`);
       
       if (!lastCompletedPreparation) {
         // Pas de préparation terminée, vérifier s'il y en a une en cours
@@ -189,6 +205,8 @@ class AutoTimelogService {
           userId: user._id,
           status: 'in-progress'
         });
+        
+        console.log(`    📊 Préparation active: ${activePreparation ? 'oui' : 'non'}`);
         
         if (!activePreparation) {
           const logStartTime = new Date(timeLog.startTime);
@@ -206,7 +224,7 @@ class AutoTimelogService {
         
         return {
           disconnect: false,
-          reason: 'Préparation en cours ou récemment connecté'
+          reason: activePreparation ? 'Préparation en cours' : 'Récemment connecté sans préparation'
         };
       }
       
@@ -215,11 +233,13 @@ class AutoTimelogService {
       const now = new Date();
       const minutesSinceLastPreparation = (now - lastPreparationTime) / (1000 * 60);
       
+      console.log(`    📊 Dernière préparation terminée il y a ${Math.round(minutesSinceLastPreparation)} minutes`);
+      
       // CORRECTION: Déconnecter 15 minutes après la dernière préparation terminée
       if (minutesSinceLastPreparation > 15) {
         return {
           disconnect: true,
-          reason: `Dernière préparation terminée il y a ${Math.round(minutesSinceLastPreparation)} minutes`
+          reason: `Dernière préparation terminée il y a ${Math.round(minutesSinceLastPreparation)} minutes (> 15min)`
         };
       }
       
@@ -241,6 +261,8 @@ class AutoTimelogService {
    */
   async disconnectUser(timeLog, user, reason) {
     try {
+      console.log(`🔌 Déconnexion de ${user.fullName}...`);
+      
       // Terminer le pointage
       timeLog.endTime = new Date();
       timeLog.status = 'completed';
@@ -255,7 +277,7 @@ class AutoTimelogService {
       
       await timeLog.save();
       
-      console.log(`🔌 ${user.fullName} déconnecté automatiquement: ${reason}`);
+      console.log(`✅ ${user.fullName} déconnecté automatiquement: ${reason}`);
     } catch (error) {
       console.error(`❌ Erreur lors de la déconnexion de ${user.fullName}:`, error);
       throw error;
@@ -287,6 +309,93 @@ class AutoTimelogService {
       };
     } catch (error) {
       console.error('Erreur lors du test:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Force la déconnexion d'un utilisateur spécifique (pour tests)
+   */
+  async forceDisconnectUser(userId, reason = 'Déconnexion manuelle par admin') {
+    try {
+      const activeLog = await TimeLog.findOne({
+        userId,
+        status: 'active'
+      }).populate('userId', 'username fullName role');
+      
+      if (!activeLog) {
+        return { success: false, message: 'Aucun pointage actif trouvé' };
+      }
+      
+      await this.disconnectUser(activeLog, activeLog.userId, reason);
+      
+      return {
+        success: true,
+        message: `${activeLog.userId.fullName} déconnecté avec succès`,
+        user: activeLog.userId.fullName
+      };
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion forcée:', error);
+      return {
+        success: false,
+        message: error.message
+      };
+    }
+  }
+  
+  /**
+   * Obtient des statistiques sur les utilisateurs connectés
+   */
+  async getConnectionStats() {
+    try {
+      const activeLogs = await TimeLog.find({ status: 'active' })
+        .populate('userId', 'username fullName role')
+        .sort({ startTime: -1 });
+      
+      const stats = {
+        totalActive: activeLogs.length,
+        byRole: {},
+        longConnections: [],
+        recentConnections: []
+      };
+      
+      const now = new Date();
+      
+      for (const log of activeLogs) {
+        const user = log.userId;
+        const role = user.role;
+        const connectedHours = (now - new Date(log.startTime)) / (1000 * 60 * 60);
+        
+        // Statistiques par rôle
+        if (!stats.byRole[role]) {
+          stats.byRole[role] = 0;
+        }
+        stats.byRole[role]++;
+        
+        // Connexions longues (> 8h)
+        if (connectedHours > 8) {
+          stats.longConnections.push({
+            user: user.fullName,
+            role: user.role,
+            hours: Math.round(connectedHours * 10) / 10,
+            startTime: log.startTime
+          });
+        }
+        
+        // Connexions récentes (< 1h)
+        if (connectedHours < 1) {
+          stats.recentConnections.push({
+            user: user.fullName,
+            role: user.role,
+            minutes: Math.round(connectedHours * 60),
+            startTime: log.startTime
+          });
+        }
+      }
+      
+      return stats;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des statistiques:', error);
       throw error;
     }
   }
